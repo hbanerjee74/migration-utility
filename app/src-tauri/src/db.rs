@@ -31,6 +31,14 @@ pub fn open(path: &Path) -> Result<Connection, DbError> {
     Ok(conn)
 }
 
+#[cfg(test)]
+pub(crate) fn open_in_memory() -> Result<Connection, DbError> {
+    let conn = Connection::open_in_memory()?;
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+    run_migrations(&conn)?;
+    Ok(conn)
+}
+
 fn run_migrations(conn: &Connection) -> Result<(), DbError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
