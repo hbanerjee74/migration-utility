@@ -90,53 +90,134 @@ receive agent requests.
 
 ### Schema
 
+Two layers: **Fabric layer** (discovered from the workspace, read-only mirror) and
+**Migration layer** (FDE decisions on top).
+
 ```sql
 CREATE TABLE schema_version (
-  version   INTEGER PRIMARY KEY,
+  version    INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL
 );
 
+-- ── FABRIC LAYER ──────────────────────────────────────────────────────────────
+-- Mirrors the Fabric API response. Never edited by the FDE directly.
+
+-- WorkspaceInfo.id is the UUID from GET /workspaces/{workspaceId}
 CREATE TABLE workspaces (
-  id                  TEXT PRIMARY KEY,
-  name                TEXT NOT NULL,
-  fabric_workspace_url TEXT,
+  id                  TEXT PRIMARY KEY,  -- WorkspaceInfo.id (UUID)
+  display_name        TEXT NOT NULL,
+  capacity_id         TEXT,              -- WorkspaceInfo.capacityId
+  capacity_region     TEXT,              -- WorkspaceInfo.capacityRegion
   migration_repo_path TEXT NOT NULL,
   created_at          TEXT NOT NULL
 );
 
-CREATE TABLE tables (
-  id           TEXT PRIMARY KEY,
+-- Item.id is globally unique across Fabric (UUID from GET /workspaces/{id}/items)
+CREATE TABLE items (
+  id           TEXT PRIMARY KEY,         -- Item.id (UUID, globally unique)
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-  schema_name  TEXT NOT NULL,
-  table_name   TEXT NOT NULL,
-  table_type   TEXT NOT NULL CHECK(table_type IN ('fact','dimension','full_refresh','unknown'))
+  display_name TEXT NOT NULL,
+  item_type    TEXT NOT NULL             -- 'Warehouse' | 'DataPipeline'
 );
 
-CREATE TABLE artifacts (
-  id               TEXT PRIMARY KEY,
-  workspace_id     TEXT NOT NULL REFERENCES workspaces(id),
-  table_id         TEXT REFERENCES tables(id),
-  name             TEXT NOT NULL,
-  artifact_type    TEXT NOT NULL CHECK(artifact_type IN ('stored_proc')),
-  sql_body         TEXT,
-  adf_pipeline_ref TEXT
+-- WarehouseProperties returned alongside the item
+CREATE TABLE warehouse_properties (
+  item_id           TEXT PRIMARY KEY REFERENCES items(id),
+  connection_string TEXT NOT NULL,       -- TDS endpoint: <guid>.datawarehouse.fabric.microsoft.com
+  collation_type    TEXT,
+  created_date      TEXT
 );
 
+-- Discovered via T-SQL: SELECT * FROM sys.schemas
+-- Composite natural key — schema_id_local is DB-scoped only, stored as lookup hint
+CREATE TABLE warehouse_schemas (
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  schema_name       TEXT NOT NULL,
+  schema_id_local   INTEGER,             -- sys.schemas.schema_id (not portable across restores)
+  PRIMARY KEY (warehouse_item_id, schema_name)
+);
+
+-- Discovered via T-SQL: SELECT * FROM INFORMATION_SCHEMA.TABLES
+-- object_id_local is DB-scoped — never use as a cross-system key
+CREATE TABLE warehouse_tables (
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  schema_name       TEXT NOT NULL,
+  table_name        TEXT NOT NULL,
+  object_id_local   INTEGER,             -- sys.objects.object_id (not portable)
+  PRIMARY KEY (warehouse_item_id, schema_name, table_name)
+);
+
+-- Discovered via T-SQL: SELECT * FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE'
+CREATE TABLE warehouse_procedures (
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  schema_name       TEXT NOT NULL,
+  procedure_name    TEXT NOT NULL,
+  object_id_local   INTEGER,             -- sys.objects.object_id (not portable)
+  sql_body          TEXT,                -- INFORMATION_SCHEMA.ROUTINES.ROUTINE_DEFINITION
+  PRIMARY KEY (warehouse_item_id, schema_name, procedure_name)
+);
+
+-- Discovered via POST /dataPipelines/{id}/getDefinition (base64-decoded JSON)
+-- activity_name is the intra-pipeline unique key (no separate id field in the JSON)
+CREATE TABLE pipeline_activities (
+  id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+  pipeline_item_id         TEXT NOT NULL REFERENCES items(id),
+  activity_name            TEXT NOT NULL,  -- unique within pipeline; used in dependsOn refs
+  activity_type            TEXT NOT NULL,  -- 'SqlServerStoredProcedure' | 'IfCondition' | etc.
+  target_warehouse_item_id TEXT REFERENCES items(id),  -- from endpointitemId in pipeline JSON
+  target_schema_name       TEXT,
+  target_procedure_name    TEXT,           -- storedProcedureName from typeProperties
+  parameters_json          TEXT,           -- storedProcedureParameters (JSON)
+  depends_on_json          TEXT,           -- dependsOn array (activity_name refs, JSON)
+  UNIQUE (pipeline_item_id, activity_name)
+);
+
+-- ── MIGRATION LAYER ───────────────────────────────────────────────────────────
+-- FDE decisions. References the Fabric layer via composite keys.
+
+-- Tables selected by the FDE for migration (scope selection step)
+CREATE TABLE selected_tables (
+  id                TEXT PRIMARY KEY,
+  workspace_id      TEXT NOT NULL REFERENCES workspaces(id),
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  schema_name       TEXT NOT NULL,
+  table_name        TEXT NOT NULL,
+  table_type        TEXT NOT NULL     -- 'fact' | 'dimension' | 'full_refresh' | 'unknown'
+    CHECK(table_type IN ('fact','dimension','full_refresh','unknown'))
+);
+
+-- Discovery agent output: which stored proc produces each selected table
+CREATE TABLE table_artifacts (
+  selected_table_id    TEXT PRIMARY KEY REFERENCES selected_tables(id),
+  warehouse_item_id    TEXT NOT NULL REFERENCES items(id),
+  schema_name          TEXT NOT NULL,
+  procedure_name       TEXT NOT NULL,
+  pipeline_activity_id INTEGER REFERENCES pipeline_activities(id),
+  discovery_status     TEXT NOT NULL  -- 'resolved' | 'orphan' | 'duplicate_writer'
+    CHECK(discovery_status IN ('resolved','orphan','duplicate_writer'))
+);
+
+-- Candidacy agent classification (keyed to the stored proc, not the table)
 CREATE TABLE candidacy (
-  artifact_id     TEXT PRIMARY KEY REFERENCES artifacts(id),
-  tier            TEXT NOT NULL CHECK(tier IN ('migrate','review','reject')),
-  reasoning       TEXT,
-  overridden       INTEGER NOT NULL DEFAULT 0,
-  override_reason  TEXT
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  schema_name       TEXT NOT NULL,
+  procedure_name    TEXT NOT NULL,
+  tier              TEXT NOT NULL     -- 'migrate' | 'review' | 'reject'
+    CHECK(tier IN ('migrate','review','reject')),
+  reasoning         TEXT,
+  overridden        INTEGER NOT NULL DEFAULT 0,
+  override_reason   TEXT,
+  PRIMARY KEY (warehouse_item_id, schema_name, procedure_name)
 );
 
+-- FDE-confirmed config per selected table
 CREATE TABLE table_config (
-  table_id          TEXT PRIMARY KEY REFERENCES tables(id),
-  pii_columns       TEXT,   -- JSON array of column names
+  selected_table_id  TEXT PRIMARY KEY REFERENCES selected_tables(id),
+  pii_columns        TEXT,            -- JSON array of column names
   incremental_column TEXT,
-  snapshot_strategy TEXT NOT NULL DEFAULT 'sample_1day'
+  snapshot_strategy  TEXT NOT NULL DEFAULT 'sample_1day'
     CHECK(snapshot_strategy IN ('sample_1day','full','full_flagged')),
-  confirmed_at      TEXT
+  confirmed_at       TEXT
 );
 ```
 
@@ -157,33 +238,35 @@ CREATE TABLE table_config (
 
 **Workspace**
 
-- `workspace_create(name, repo_path, fabric_url?) → Workspace`
+- `workspace_create(display_name, repo_path, fabric_workspace_id, capacity_id?) → Workspace`
 - `workspace_get(id) → Workspace`
 
-**Tables**
+**Fabric layer (import from API / T-SQL — bulk upsert)**
 
-- `tables_upsert(workspace_id, rows: Vec<TableRow>) → ()`
-- `tables_list(workspace_id) → Vec<Table>`
+- `items_upsert(workspace_id, rows: Vec<ItemRow>) → ()`
+- `warehouse_properties_upsert(item_id, connection_string, collation_type) → ()`
+- `warehouse_schemas_upsert(warehouse_item_id, rows: Vec<SchemaRow>) → ()`
+- `warehouse_tables_upsert(warehouse_item_id, rows: Vec<TableRow>) → ()`
+- `warehouse_procedures_upsert(warehouse_item_id, rows: Vec<ProcRow>) → ()`
+- `pipeline_activities_upsert(pipeline_item_id, rows: Vec<ActivityRow>) → ()`
+- `items_list(workspace_id, item_type?) → Vec<Item>`
+- `warehouse_tables_list(warehouse_item_id) → Vec<WarehouseTable>`
+- `warehouse_procedures_list(warehouse_item_id) → Vec<WarehouseProcedure>`
 
-**Artifacts**
+**Migration layer (FDE decisions)**
 
-- `artifacts_upsert(workspace_id, rows: Vec<ArtifactRow>) → ()`
-- `artifacts_list(workspace_id) → Vec<Artifact>`
-
-**Candidacy**
-
-- `candidacy_save(artifact_id, tier, reasoning) → ()`
-- `candidacy_override(artifact_id, tier, reason) → ()`
+- `selected_tables_save(workspace_id, rows: Vec<SelectedTableRow>) → ()`
+- `selected_tables_list(workspace_id) → Vec<SelectedTable>`
+- `table_artifact_save(selected_table_id, warehouse_item_id, schema_name, procedure_name, pipeline_activity_id?, discovery_status) → ()`
+- `candidacy_save(warehouse_item_id, schema_name, procedure_name, tier, reasoning) → ()`
+- `candidacy_override(warehouse_item_id, schema_name, procedure_name, tier, reason) → ()`
 - `candidacy_list(workspace_id) → Vec<CandidacyResult>`
-
-**Table config**
-
-- `table_config_save(table_id, pii_columns, incremental_column, snapshot_strategy) → ()`
-- `table_config_get(table_id) → Option<TableConfig>`
+- `table_config_save(selected_table_id, pii_columns, incremental_column, snapshot_strategy) → ()`
+- `table_config_get(selected_table_id) → Option<TableConfig>`
 
 **Plan + Git**
 
-- `plan_write(workspace_id) → ()` — serialises state to `plan.md` in migration repo
+- `plan_write(workspace_id) → ()` — serialises migration state to `plan.md` in migration repo
 - `git_commit_push(repo_path, message) → ()` — stages plan.md + config, commits, pushes
 
 ### File layout
@@ -191,13 +274,16 @@ CREATE TABLE table_config (
 ```text
 app/src-tauri/src/
   commands/
-    workspace.rs
-    tables.rs
-    artifacts.rs
-    candidacy.rs
-    table_config.rs
-    plan.rs
-    git.rs
+    workspace.rs        -- workspace_create, workspace_get
+    fabric_items.rs     -- items_upsert, items_list, warehouse_properties_upsert
+    fabric_schema.rs    -- schemas/tables/procedures upsert + list
+    fabric_pipelines.rs -- pipeline_activities_upsert
+    scope.rs            -- selected_tables_save, selected_tables_list
+    discovery.rs        -- table_artifact_save
+    candidacy.rs        -- candidacy_save, candidacy_override, candidacy_list
+    table_config.rs     -- table_config_save, table_config_get
+    plan.rs             -- plan_write
+    git.rs              -- git_commit_push
   db/
     mod.rs
     migrations.rs
@@ -216,19 +302,19 @@ to render before Fabric import exists.
 
 ### Seed content
 
-One workspace: `mock-workspace`, repo path points to a temp directory.
+One workspace: `mock-workspace`, `fabric_workspace_id` = mock UUID, repo path = temp dir.
 
-Tables and their producing stored procs (from `build-plan.md` mock scenarios):
+One `Warehouse` item and two `DataPipeline` items (P-01 linear, P-02 fan-out):
 
-| Table | Stored Proc | ADF Pipeline | Candidacy |
-|---|---|---|---|
-| `fact_sales` | `usp_load_fact_sales` (SP-01: pure T-SQL) | P-01 | Migrate |
-| `dim_customer` | `usp_load_dim_customer` (SP-02: CTEs + temp tables) | P-01 | Migrate |
-| `dim_product` | `usp_load_dim_product` (SP-04: MERGE SCD Type 1) | P-02 | Migrate |
-| `silver_revenue` | `usp_load_silver_revenue` (SP-10: full-refresh TRUNCATE+INSERT) | P-02 | Migrate |
-| `gold_summary` | `usp_load_gold_summary` (SP-03: dynamic SQL) | P-01 | Reject |
+| Table | Schema | Stored Proc | Pipeline | Activity type | Candidacy |
+|---|---|---|---|---|---|
+| `fact_sales` | `dbo` | `usp_load_fact_sales` (SP-01: pure T-SQL) | P-01 | `SqlServerStoredProcedure` | migrate |
+| `dim_customer` | `dbo` | `usp_load_dim_customer` (SP-02: CTEs + temp tables) | P-01 | `SqlServerStoredProcedure` | migrate |
+| `dim_product` | `dbo` | `usp_load_dim_product` (SP-04: MERGE SCD Type 1) | P-02 | `SqlServerStoredProcedure` | migrate |
+| `silver_revenue` | `dbo` | `usp_load_silver_revenue` (SP-10: TRUNCATE+INSERT) | P-02 | `SqlServerStoredProcedure` | migrate |
+| `gold_summary` | `dbo` | `usp_load_gold_summary` (SP-03: dynamic SQL) | P-01 | `SqlServerStoredProcedure` | reject |
 
-Pre-populated table config for fact_sales:
+Pre-populated table config for `fact_sales`:
 
 - PII columns: `["customer_email", "customer_phone"]`
 - Incremental column: `load_date`
