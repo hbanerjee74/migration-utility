@@ -56,24 +56,16 @@ All workspace-level Fabric items. One row per item regardless of type.
 | `description` | TEXT | `Item.description` (optional) |
 | `folder_id` | TEXT | `Item.folderId` — null means workspace root |
 | `item_type` | TEXT NOT NULL | `Item.type` — see enum below |
+| `connection_string` | TEXT | `WarehouseProperties.connectionString` — Warehouse only (TDS endpoint) |
+| `collation_type` | TEXT | `WarehouseProperties.collationType` — Warehouse only |
 
 `item_type` CHECK: `'Warehouse' \| 'DataPipeline' \| 'Notebook'`
 
 > Extend the CHECK as support for additional item types is added.
 
-### `warehouse_properties`
-
-Warehouse-specific properties. 1:1 with `items` where `item_type = 'Warehouse'`.
-Populated from `GET /warehouses/{warehouseId}` (type-specific endpoint — the generic
-items endpoint does not return these fields).
-
-| Column | Type | Source |
-|---|---|---|
-| `item_id` | TEXT PK → `items.id` | — |
-| `connection_string` | TEXT NOT NULL | `WarehouseProperties.connectionString` (TDS endpoint) |
-| `collation_type` | TEXT NOT NULL | `WarehouseProperties.collationType` |
-| `created_date` | TEXT NOT NULL | `WarehouseProperties.createdDate` |
-| `last_updated_time` | TEXT NOT NULL | `WarehouseProperties.lastUpdatedTime` |
+`connection_string` and `collation_type` are null for non-Warehouse items. Populated
+from `GET /warehouses/{warehouseId}` (the generic items endpoint does not return these
+fields).
 
 ### `warehouse_schemas`
 
@@ -238,21 +230,15 @@ CREATE TABLE workspaces (
 );
 
 CREATE TABLE items (
-  id           TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-  display_name TEXT NOT NULL,
-  description  TEXT,
-  folder_id    TEXT,
-  item_type    TEXT NOT NULL
-    CHECK(item_type IN ('Warehouse','DataPipeline','Notebook'))
-);
-
-CREATE TABLE warehouse_properties (
-  item_id           TEXT PRIMARY KEY REFERENCES items(id),
-  connection_string TEXT NOT NULL,
-  collation_type    TEXT NOT NULL,
-  created_date      TEXT NOT NULL,
-  last_updated_time TEXT NOT NULL
+  id                TEXT PRIMARY KEY,
+  workspace_id      TEXT NOT NULL REFERENCES workspaces(id),
+  display_name      TEXT NOT NULL,
+  description       TEXT,
+  folder_id         TEXT,
+  item_type         TEXT NOT NULL
+    CHECK(item_type IN ('Warehouse','DataPipeline','Notebook')),
+  connection_string TEXT,   -- Warehouse only: TDS endpoint
+  collation_type    TEXT    -- Warehouse only
 );
 
 CREATE TABLE warehouse_schemas (
@@ -348,8 +334,9 @@ CREATE TABLE table_config (
   Stored as a lookup hint only. Never used as a cross-system key. Natural composite
   keys (item id + schema + object name) are the portable identifiers.
 
-- **`warehouse_properties` is a separate table** — not all items are warehouses.
-  The 1:1 split keeps `items` flat and avoids nullable type-specific columns.
+- **`connection_string` and `collation_type` are on `items`** — nullable columns, only
+  set for Warehouse rows. Avoids a separate table and a JOIN every time the scanner
+  needs to connect to a warehouse.
 
 - **`folder_id` null = workspace root** — the Fabric API omits `folderId` entirely
   for root-level items rather than returning null. Treat its absence as root placement.
