@@ -2,6 +2,8 @@
 
 Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fabric Warehouse stored procedures to dbt models on Vibedata's platform. Targets silver and gold transformations only (bronze is out of scope).
 
+**Maintenance rule:** This file contains architecture, conventions, and guidelines — not product details. Do not add counts, feature descriptions, or any fact that can be discovered by reading code. If it will go stale when the code changes, it doesn't belong here — point to the source file instead.
+
 ## Architecture
 
 | Component | What | Tech |
@@ -70,6 +72,11 @@ Before writing any test code, read existing tests for the files you changed:
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
 
+## Issue Management
+
+- **PR title format:** `MU-XXX: short description`
+- **PR body link:** `Fixes MU-XXX`
+
 ## Gotchas
 
-<!-- List known footguns here as they emerge. -->
+- **Agent SDK has no team tools:** The Claude Agent SDK (Python) does NOT support TeamCreate, TaskCreate, or SendMessage. Use the `Task` tool for sub-agents. Multiple `Task` calls in the same turn run in parallel.
