@@ -11,6 +11,7 @@ pub enum CommandError {
     #[error("io error: {0}")]
     Io(String),
     #[error("git error: {0}")]
+    #[allow(dead_code)]
     Git(String),
 }
 
