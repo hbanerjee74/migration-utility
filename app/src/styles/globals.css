@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Fonts — Inter Variable (sans) + JetBrains Mono Variable (mono)
+   Served from Bunny Fonts (privacy-respecting Google Fonts alternative)
+   ============================================================ */
+@import url("https://fonts.bunny.net/css?family=inter:100,200,300,400,500,600,700,800,900|jetbrains-mono:100,200,300,400,500,600,700,800&display=swap");
+
+/* ============================================================
+   AD Brand CSS Variables
+   ============================================================ */
+:root {
+  /* --- AD Brand palette --- */
+  --color-seafoam: oklch(0.72 0.14 162);   /* success / completed */
+  --color-pacific: oklch(0.58 0.19 234);   /* primary / action / info */
+  --color-ocean:   oklch(0.45 0.17 248);   /* secondary / depth */
+
+  /* --- shadcn/ui semantic overrides — light mode --- */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0 0);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+
+  --primary: var(--color-pacific);
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+
+  --accent: oklch(0.96 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: var(--color-pacific);
+
+  /* --- Border radius scale --- */
+  --radius: 0.5rem; /* 8px — cards/dialogs */
+
+  /* --- Font stack --- */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+}
+
+/* ============================================================
+   Dark mode
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* AD Brand palette stays the same — slightly lighter for dark bg */
+    --color-seafoam: oklch(0.76 0.14 162);
+    --color-pacific: oklch(0.65 0.19 234);
+    --color-ocean:   oklch(0.55 0.17 248);
+
+    /* shadcn/ui semantic overrides — dark mode */
+    --background: oklch(0.09 0 0);
+    --foreground: oklch(0.95 0 0);
+
+    --card: oklch(0.13 0 0);
+    --card-foreground: oklch(0.95 0 0);
+
+    --popover: oklch(0.13 0 0);
+    --popover-foreground: oklch(0.95 0 0);
+
+    --primary: var(--color-pacific);
+    --primary-foreground: oklch(1 0 0);
+
+    --secondary: oklch(0.18 0 0);
+    --secondary-foreground: oklch(0.9 0 0);
+
+    --muted: oklch(0.18 0 0);
+    --muted-foreground: oklch(0.6 0 0);
+
+    --accent: oklch(0.18 0 0);
+    --accent-foreground: oklch(0.9 0 0);
+
+    --destructive: oklch(0.6 0.22 27);
+    --destructive-foreground: oklch(1 0 0);
+
+    --border: oklch(0.22 0 0);
+    --input: oklch(0.22 0 0);
+    --ring: var(--color-pacific);
+  }
+}
+
+/* ============================================================
+   Base styles
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  margin: 0;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+}
