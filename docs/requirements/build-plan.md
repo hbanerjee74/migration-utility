@@ -22,8 +22,8 @@
 1. Claude Agent SDK (Python) + Anthropic API key
 2. dbt-fabricspark adapter
 3. dbt-core-mcp — confirmed compatible with dbt-fabricspark and dbt Core 1.9+
-4. Fabric API service principal — workspace metadata, notebooks, table schemas
-5. One real customer domain with 10+ notebooks (SQL-heavy majority)
+4. Fabric API service principal — workspace metadata, stored procedures, ADF pipelines, table schemas
+5. One real customer domain with 10+ stored procedures (SQL-heavy majority)
 6. Dedicated F2 PAYG workspace with pause/resume
 7. Vibedata production repo template
 8. GitHub Actions runner with Fabric API access and `ANTHROPIC_API_KEY` secret
@@ -34,7 +34,7 @@
 
 | Phase | What | Weeks |
 |-------|------|-------|
-| 0 | Foundation — validate stack, scaffold orchestrator, create mock notebooks, define plan.md schema | 0.5 |
+| 0 | Foundation — validate stack, scaffold orchestrator, create mock stored procs + ADF pipelines, define plan.md schema | 0.5 |
 | 1 | MVP pipeline — scan → classify → translate → test → push (SQL-heavy only) | 3 |
 | 2 | Real customer domain end-to-end + Tauri setup UI + hardening | 1.5 |
 | **MVP** | **Full pipeline, SQL-heavy patterns** | **5** |
@@ -44,44 +44,62 @@
 
 | Week | Deliverable |
 |------|-------------|
-| 1 | Candidacy agent — workspace scan, dependency graph (`get_lineage`), tier classification → scope.md + candidacy.md + dbt sources |
-| 2 | Translation agent + test generator — N-01, N-02, N-04, N-10 → dbt model + schema.yml + unit test + YAML fixture |
+| 1 | Candidacy agent — ADF pipeline scan, stored proc discovery, dependency graph (`get_lineage`), tier classification → scope.md + candidacy.md + dbt sources |
+| 2 | Translation agent + test generator — SP-01, SP-02, SP-04, SP-10 → dbt model + schema.yml + unit test + YAML fixture |
 | 3 | Orchestrator + snapshot pipeline + validation agent + push to prod branch → full pipeline end-to-end on mocks |
 
 ### Phase 2 Breakdown
 
 | Week | Deliverable |
 |------|-------------|
-| 4 | E-01, E-02 on real notebooks. Tauri setup UI (scope, candidacy, table config) |
+| 4 | E-01, E-02 on real stored procs. Tauri setup UI (scope, candidacy, table config) |
 | 5 | E-03 session resumption. Error handling. Edge cases from real data |
 
 ### Phase 3: Pattern Expansion (ongoing)
 
 | Pattern | Effort |
 |---------|--------|
-| PySpark DataFrame API (N-03) | 2–3 days |
-| Mixed SQL/Python (N-05) | 1–2 days |
-| `%run` references (N-06) | 1 day |
-| Reject refinement (N-07, N-08, N-09) | 1 day each |
+| Dynamic SQL stored procs (SP-03) | 2–3 days |
+| Cross-database references (SP-05) | 1–2 days |
+| Cursor-based stored procs (SP-06) | 1–2 days |
+| Lakehouse notebook support (N-01 through N-07) | 2–3 weeks |
 
 ---
 
 ## Mock Scenarios
 
-### Notebooks
+### Stored Procedures (Warehouse MVP)
 
 | ID | Scenario | Phase |
 |----|----------|-------|
-| N-01 | Pure SQL — SELECT/JOIN/GROUP BY | MVP |
-| N-02 | SparkSQL with temp views and CTEs | MVP |
-| N-04 | Incremental MERGE (SCD Type 1/2) | MVP |
-| N-10 | Full-refresh (OVERWRITE) | MVP |
-| N-03 | PySpark DataFrame API | Post-MVP |
-| N-05 | Mixed 70% SQL + Python string formatting | Post-MVP |
-| N-06 | `%run` notebook reference | Post-MVP |
-| N-07 | UDF-heavy | Post-MVP |
-| N-08 | ML pipeline | Post-MVP |
-| N-09 | RDD operations | Post-MVP |
+| SP-01 | Pure T-SQL — SELECT/JOIN/GROUP BY, INSERT INTO target | MVP |
+| SP-02 | T-SQL with CTEs and temp tables (#temp) | MVP |
+| SP-04 | Incremental MERGE (SCD Type 1/2) | MVP |
+| SP-10 | Full-refresh (TRUNCATE + INSERT or DROP + CTAS) | MVP |
+| SP-03 | Dynamic SQL (`EXEC`/`sp_executesql`) | Post-MVP |
+| SP-05 | Cross-database references | Post-MVP |
+| SP-06 | Cursor-based row iteration | Post-MVP |
+
+### Notebooks (Lakehouse Post-MVP)
+
+| ID | Scenario | Phase |
+|----|----------|-------|
+| N-01 | SparkSQL with temp views and CTEs | Post-MVP |
+| N-02 | PySpark DataFrame API | Post-MVP |
+| N-03 | Mixed 70% SQL + Python string formatting | Post-MVP |
+| N-04 | `%run` notebook reference | Post-MVP |
+| N-05 | UDF-heavy | Post-MVP |
+| N-06 | ML pipeline | Post-MVP |
+| N-07 | RDD operations | Post-MVP |
+
+### ADF Pipelines
+
+| ID | Scenario | Phase |
+|----|----------|-------|
+| P-01 | Linear: SP-A → SP-B → SP-C (sequential stored proc activities) | MVP |
+| P-02 | Parallel fan-out: SP-A, SP-B, SP-C → SP-D (wait dependency) | MVP |
+| P-03 | Conditional execution (If/Switch activity) | MVP |
+| P-04 | Parameterized pipeline (runtime parameters passed to stored procs) | MVP |
 
 ### Dependency Graphs
 
@@ -92,8 +110,8 @@
 | G-03 | Diamond: A → B, A → C, B+C → D |
 | G-04 | Mixed tiers: Migrate depends on Review upstream |
 | G-05 | Circular dependency (should error) |
-| G-06 | External source (table not in any notebook) |
-| G-07 | 50+ notebooks, mixed tiers |
+| G-06 | External source (table not in any stored proc) |
+| G-07 | 50+ stored procs, mixed tiers |
 | G-08 | Resumed session — plan.md 60% DONE, 2 BLOCKED |
 
 ### Snapshot + Fixtures
@@ -121,8 +139,8 @@
 
 | ID | Scenario |
 |----|----------|
-| E-01 | 5 notebooks, all Migrate, linear chain |
-| E-02 | 10 notebooks, mixed tiers, diamond |
+| E-01 | 5 stored procs, all Migrate, linear ADF pipeline |
+| E-02 | 10 stored procs, mixed tiers, diamond ADF pipeline |
 | E-03 | Session interrupted at 40%, resumed |
 
 ---
@@ -133,7 +151,7 @@
 |------|------------|
 | dbt-fabricspark instability | Validate Day 1 |
 | dbt-core-mcp incompatible with dbt-fabricspark or dbt <1.9 | Validate Day 1 — fallback: custom wrappers (+1 week) |
-| Translation quality | Eval loop Week 2 with real notebooks |
-| Fabric API gaps | Week 1 — fall back to notebook export/parse |
+| Translation quality | Eval loop Week 2 with real stored procs |
+| Fabric API gaps for stored proc discovery | Week 1 — fall back to ADF pipeline JSON export/parse |
 | GitHub Actions cost | Self-hosted runner if needed |
-| Real notebooks diverge from mocks | Real notebooks by Week 4 |
+| Real stored procs diverge from mocks | Real stored procs by Week 4 |

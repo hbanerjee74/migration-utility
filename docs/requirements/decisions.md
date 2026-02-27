@@ -9,17 +9,21 @@
 *These are the load-bearing constraints. Everything else is derived from them.*
 
 ### DEC-01 — Transformations Only
+
 **Decision:** Silver and gold transformations only. Bronze (DLT/mirroring) is out of scope — handled by a separate utility.
 **Rationale:** Bronze has a different migration path. Mixing concerns complicates both utilities.
 
 ---
 
-### DEC-02 — Single Target: Lakehouse + Delta via dbt-fabric
-**Decision:** All transformation code converts to dbt models on Lakehouse + Delta using Vibedata's dbt-fabric port. One target, no exceptions.
+### DEC-02 — Target: Warehouse First, Lakehouse Later
+
+**Decision:** MVP targets Fabric Warehouse (T-SQL) sources — stored procedures orchestrated by ADF pipelines — translates to dbt models on Lakehouse + Delta via Vibedata's dbt-fabric port. Lakehouse (Spark notebooks/PySpark) source support added post-MVP.
+**Rationale:** Warehouse stored procedures are pure T-SQL and map directly to dbt SQL models. Lakehouse notebooks require SQL extraction from PySpark — harder problem, deferred.
 
 ---
 
 ### DEC-03 — Input: Fabric Workspace Only
+
 **Decision:** The utility takes a Fabric workspace as input and creates an isolated migration repo for all utility work. Production artifacts are never modified.
 
 ---
@@ -29,6 +33,7 @@
 *Who does what, when, and with what authority. These constrain the tool's design surface.*
 
 ### DEC-04 — Migration is Per-Domain
+
 **Decision:** Migration runs one domain at a time, not in bulk. The FDE performs the migration; the domain owner signs off scope only.
 **Rationale:** Per-domain limits blast radius and keeps accountability with the domain owner.
 
@@ -39,26 +44,31 @@
 *What gets created and what gets replaced.*
 
 ### DEC-05 — Production Repo to Vibedata Standards
+
 **Decision:** A new production GitHub repo is created following Vibedata standards. This is separate from the migration repo where the utility does its work. We do not retrofit the customer's existing repo.
 
 ---
 
 ### DEC-06 — CI/CD: Replace, Not Extend
+
 **Decision:** Customers adopt Vibedata's CI/CD and branch model. We do not extend or integrate with their existing workflows.
 
 ---
 
 ### DEC-07 — Observability: Automatic
+
 **Decision:** No observability setup during migration. It activates automatically when the domain runs on Vibedata's standard pipelines.
 
 ---
 
 ### DEC-08 — Handoff: Utility Pushes to Production Repo Branch
+
 **Decision:** Utility pushes completed code to a branch in the production repo. FDE opens a standard PR from there. The PR, UAT, and merge all happen in the production repo using standard Vibedata CI/CD.
 
 ---
 
 ### DEC-09 — Cutover and Legacy Retirement
+
 **Decision:** Cutover happens on PR merge via standard Vibedata CI/CD. Legacy pipeline retirement is the domain owner's responsibility and outside the utility's scope.
 
 ---
@@ -67,22 +77,27 @@
 
 *Pick the tables, then evaluate the notebooks. This defines what the engine will work on.*
 
-### DEC-10 — Scope Selection Before Candidacy
-**Decision:** Domain table scope is agreed before candidacy runs. Candidacy assessment operates only on notebooks producing the selected tables.
-**Rationale:** Lakehouses are not organised by domain — the utility cannot infer domain boundaries.
+### DEC-10 — Table-First Scope Selection
+
+**Decision:** FDE selects domain tables first. Agent traces each table back to the artifact that produces it — stored procedures for Warehouse (via write targets: `MERGE INTO`, `INSERT INTO`, `CREATE TABLE AS SELECT`), notebooks for Lakehouse (via `df.write.saveAsTable`, `INSERT INTO`). ADF pipeline definitions are the primary discovery mechanism for Warehouse (stored proc activity references). Candidacy runs only on the resolved artifacts.
+**Rationale:** Domain owners think in tables, not code artifacts. Table-first also catches orphan tables (no producing artifact), duplicate writers (multiple artifacts → same table), and cross-domain dependencies early.
 
 ---
 
 ### DEC-11 — Three-Tier Candidacy Classification
-**Decision:** After scope selection, a candidacy agent classifies each in-scope notebook:
+
+**Decision:** After scope selection, a candidacy agent classifies each in-scope artifact (stored procedure for Warehouse MVP, notebook for Lakehouse post-MVP):
 
 | Tier | Criteria | Handling |
 |------|----------|----------|
 | Migrate | >70% SQL-expressible; no blocking patterns | Utility migrates automatically |
 | Review | 40–70% SQL-expressible; some blocking patterns present | FDE migrates manually |
-| Reject | <40% SQL-expressible; blocking patterns dominate (UDFs, row iteration, ML ops, `%run` orchestration, RDD ops) | FDE migrates manually |
+| Reject | <40% SQL-expressible; blocking patterns dominate | FDE migrates manually |
 
-**Note:** 70%/40% thresholds are a starting point — calibrate against real customer notebooks before release.
+**Warehouse blocking patterns:** Dynamic SQL (`EXEC`/`sp_executesql`), cursor-based row iteration, CLR functions, cross-database queries, undocumented system procs.
+**Lakehouse blocking patterns (post-MVP):** UDFs, row iteration, ML ops, `%run` orchestration, RDD ops.
+
+**Note:** 70%/40% thresholds are a starting point — calibrate against real customer artifacts before release.
 
 ---
 
@@ -91,6 +106,7 @@
 *Two interfaces. A Tauri desktop app handles pre-migration setup (scope, candidacy, table config) — no hosting, no auth, persists state to repo. Once the FDE triggers migration, everything runs headless via GitHub Actions + Claude Agent SDK. Execution state and agent outputs are markdown in the repo.*
 
 ### DEC-19 — Execution Runtime: GitHub Actions + Claude Agent SDK
+
 **Decision:**
 
 - **Setup UI (Tauri desktop app):** scope selection, candidacy review/override, table-level config (snapshot strategy, PII column confirmation, incremental column confirmation). Working state persists in local SQLite — FDE can close and reopen across days while consulting with domain owner. Once setup is finalized, Tauri pushes config into plan.md and commits to repo
@@ -104,6 +120,7 @@
 ---
 
 ### DEC-20 — dbt-core-mcp for Lineage, Compilation, and Validation
+
 **Decision:**
 
 - Agents use [dbt-core-mcp](https://github.com/NiclasOlofsson/dbt-core-mcp) as an MCP server for all dbt interactions: lineage resolution, compiled SQL retrieval, model execution, and validation queries
@@ -116,14 +133,17 @@
 ---
 
 ### DEC-12 — Review/Reject: Parallel Manual FDE Track
+
 **Decision:** Review and Reject notebooks are migrated manually by the FDE in parallel with automated migration. Both tracks converge at the PR.
 
 ---
 
 ### DEC-13 — Engine: Dependency-Aware Parallel Execution with plan.md State
+
 **Decision:**
 
-- Agent builds a dependency graph of Migrate-tier notebooks and generates `plan.md` as the persistent state file
+- Agent builds a dependency graph of Migrate-tier artifacts (stored procedures for Warehouse, notebooks for Lakehouse) and generates `plan.md` as the persistent state file
+- ADF/Fabric pipeline definitions are a primary input for Warehouse — stored proc execution order, parameters, and conditional logic come from ADF activity definitions. For Lakehouse, pipelines are a secondary validation input
 - Upstream tables are auto-registered as external dbt sources from the graph
 - Independent models run in parallel
 - Models blocked by unresolved Review/Reject upstream dependencies are marked BLOCKED in `plan.md`
@@ -137,6 +157,7 @@
 *Agents test migrated models using dbt unit tests with YAML fixtures — no full table materialization required. Fixture data comes from a production snapshot.*
 
 ### DEC-14 — Testing Approach: dbt Unit Tests with YAML Fixtures
+
 **Decision:**
 
 - Agent generates dbt unit tests and YAML fixtures for every migrated model as part of migration
@@ -150,6 +171,7 @@
 ---
 
 ### DEC-15 — Fixture Data Source: Point-in-Time Snapshot
+
 **Decision:**
 
 - Fixtures are derived from a point-in-time snapshot of all tables in the dependency graph — bronze, silver, and gold
@@ -163,19 +185,24 @@
 ### DEC-16 — Snapshot Strategy by Table Type
 
 **All tables:**
+
 - PII columns are recommended by the agent per table, confirmed by the FDE, and masked before fixture generation
 
 **Dimensions:**
+
 - Snapshotted in full
 
 **Facts:**
+
 - Sampled to 1 day on the incremental column — most recent complete day by default, FDE-overridable
 - Incremental column is inferred from notebook SQL patterns and confirmed by the FDE before snapshot runs
 
 **Downstream silver/gold:**
+
 - Filtered to rows derivable from the 1-day fact sample
 
 **Full-refresh tables (no incremental pattern):**
+
 - Copied in full and flagged to the FDE
 
 ---
@@ -185,6 +212,7 @@
 *Validation uses real production data in an ephemeral environment. This is standard Vibedata CI/CD — the utility does not own it.*
 
 ### DEC-17 — UAT: Parallel Run in Ephemeral Workspace
+
 **Decision:** After the FDE opens the PR, Vibedata's CI/CD provisions an ephemeral Fabric workspace. E2E pipelines run against live production sources as a parallel run alongside legacy pipelines. The domain owner signs off.
 
 ---
@@ -194,6 +222,7 @@
 *Fully decoupled from the migration utility. Optional step after migration is complete.*
 
 ### DEC-18 — Memory Seeding: Separate Agent, Two Sources
+
 **Decision:**
 
 - Memory and rules creation is optional and handled by a separate agent — not part of the migration utility

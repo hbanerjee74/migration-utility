@@ -39,7 +39,7 @@ Data Engineers, Analytics Engineers, and Data Reliability Engineers in early/gro
 
 *Sources: [Problem Statement References](context/problem-statement-references.md#1-who-experiences-this-pain)*
 
-### Why current solutions fail:
+### Why current solutions fail
 
 | Failure Category | Problem | Evidence |
 | -------- | -------- | -------- |
@@ -51,7 +51,7 @@ Data Engineers, Analytics Engineers, and Data Reliability Engineers in early/gro
 
 *Sources: [Problem Statement References](context/problem-statement-references.md#2-why-current-solutions-fail)*
 
-### Why existing tools don't solve this:
+### Why existing tools don't solve this
 
 | Tool | What It Does Well | Why It Doesn't Close the Loop |
 | -------- | -------- | -------- |
@@ -65,11 +65,11 @@ Data Engineers, Analytics Engineers, and Data Reliability Engineers in early/gro
 *Note: Ingestion tools (dlthub, Airbyte) focus narrowly on source connectivity. Observability and catalog tools (Monte Carlo, Datafold, Great Expectations, Atlan) address specific slices—data diff, validation rules, cataloging. None attempt end-to-end workflow integration.*
 *Source note: Fivetran connector count from [Fivetran Deep Dive](context/competition/fivetran.md).*
 
-### The fundamental gap:
+### The fundamental gap
 
 Teams cobble together 5-7+ tools, creating integration overhead, responsibility gaps, and knowledge silos.
 
-No existing tool provides spec driven development (intent), shift-left methodology (tests and golden data validation), bidirectional feedback from production to development (retro agent), or persistent organizational knowledge (skills) to support data engineering workflows. 
+No existing tool provides spec driven development (intent), shift-left methodology (tests and golden data validation), bidirectional feedback from production to development (retro agent), or persistent organizational knowledge (skills) to support data engineering workflows.
 
 **The 1:10:100 rule**: Addressing issue in requirements/build/unit test phase cost ~$1, $10 in UAT and $100 in prod. Current tools focus on the $10-$100 stages.
 *Sources: [Modern data stack complexity survey](context/assets/s1-blogs-the-current-data-stack-is-too-complex-70-data-leaders-practitioners-agree.md), [Problem Statement References](context/problem-statement-references.md#3-additional-context)*
@@ -86,6 +86,7 @@ Three fundamental industry shifts make agentic data engineering not just possibl
 | **Build economics** | Implementation cost acts as quality filter | Zero-cost build removes the filter; bad specs execute at scale | Specification precision becomes the binding constraint. Vibedata's Requirements Agent and intent-capture workflow address exactly this gap. AWS launched Kiro around the same premise — specs before code. |
 
 **Key data points** (see [Industry Changes Analysis](context/changes-due-to-ai.md) for full research):
+
 - **Gartner**: 40% of enterprise apps will have AI agents by 2026 (up from <5% in 2025)
 - **McKinsey**: AI agents could handle 44% of US work hours; AI fluency is fastest-growing skill (7x in 2 years)
 - **Deloitte**: 75% of companies planning agentic AI deployment within 2 years
@@ -99,7 +100,7 @@ Three fundamental industry shifts make agentic data engineering not just possibl
 
 ### 4.1 Primary Persona: Full-Stack Analyst (D010-D011)
 
-The Full-Stack Analyst is an emerging role that Vibedata enables. As AI collapses the cost of production across knowledge work, two classes of practitioner are emerging: those who specify precisely and orchestrate agent fleets (the specification class), and those using AI as a copilot to do the same work faster (being commoditized). The Full-Stack Analyst is Vibedata's instantiation of the specification class for data engineering. This role combines the business context of a Business Analyst/Data Analyst, modeling skills of an Analytics Engineer with the technical execution of a Data Engineer. Today, these responsibilities are split across roles or handled by individuals wearing multiple hats (or completely missing in smaller organizations). 
+The Full-Stack Analyst is an emerging role that Vibedata enables. As AI collapses the cost of production across knowledge work, two classes of practitioner are emerging: those who specify precisely and orchestrate agent fleets (the specification class), and those using AI as a copilot to do the same work faster (being commoditized). The Full-Stack Analyst is Vibedata's instantiation of the specification class for data engineering. This role combines the business context of a Business Analyst/Data Analyst, modeling skills of an Analytics Engineer with the technical execution of a Data Engineer. Today, these responsibilities are split across roles or handled by individuals wearing multiple hats (or completely missing in smaller organizations).
 
 Vibedata's agentic workflow allows a single practitioner to own the full pipeline from intent to production.
 
@@ -226,7 +227,7 @@ Vibedata's moat is built on four integrated pillars plus a compounding flywheel.
 | MCP | The hands | Open connectivity to live systems (lakehouse, specs, tickets) |
 
 > **Why this matters**: An LLM alone is generic. Skills alone can be copied. MCP alone is a protocol. The agentic workflow alone is a feature. Together, they create a platform that takes significant effort to build and maintain. Vibedata is this purpose-built application for agentic data engineering, curated and evolving.
-
+>
 > **Why this matters now**: When the cost of building collapses, the cost of specifying badly compounds faster than ever — you can build the wrong thing at unprecedented speed and scale. Vibedata's four pillars address this directly: the agentic workflow captures intent before generating code, Skills encode the domain knowledge that prevents bad specs, and the improvement flywheel means every resolved incident makes future specifications more precise.
 
 #### How the Agentic Workflow Spans Surfaces
@@ -251,6 +252,7 @@ Every action makes the platform smarter through two reinforcing loops:
 | Operate | Production alert → issue resolved (issues + CI) | **Skills + Runbooks + Code + Tests**: Root causes documented, fix patterns recorded, new tests prevent recurrence |
 
 **Cross-loop reinforcement**:
+
 - Operate issues reveal gaps → Skills updated → Build avoids the same issue
 - Operate issues reveal missing tests → Tests added → Issues caught earlier (build/PR/pipeline)
 - Build context (intent, plan) preserved → Operate diagnosis understands original requirements

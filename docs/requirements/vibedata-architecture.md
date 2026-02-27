@@ -311,7 +311,7 @@ Main user interface for data practitioners.
 
 Configure and manage source data ingestion. Supports three source types:
 
-**API Sources (DLT)**
+##### API Sources (DLT)
 
 DLT pipelines ingest data from API sources into the lakehouse as bronze. Source configurations are stored in the linked GitHub repo. The target lakehouse is selected by the user.
 
@@ -323,11 +323,11 @@ DLT pipelines ingest data from API sources into the lakehouse as bronze. Source 
 
 For the development and deployment flow (feature branches, ephemeral workspaces, CI/CD), see Section 3.
 
-**Database Sources (Fabric Mirroring)**
+##### Database Sources (Fabric Mirroring)
 
 Database sources are ingested using Fabric mirroring. Users can configure target lakehouse per source. This is not managed in Vibedata.
 
-**Open Mirroring Sources**
+##### Open Mirroring Sources
 
 Applications that support Open Mirroring can be ingested into the Fabric lakehouse directly. This is not managed in Vibedata.
 
@@ -348,7 +348,7 @@ For the development and deployment flow (plan → execute → deploy, feature br
 
 Data and pipeline observability scoped to the Fabric workspace. Monitor tracks all scheduled pipelines — ingestion, transformation, and data quality (Elementary anomaly detection for freshness, volume, column drift, and distribution shifts).
 
-**Telemetry Collection**
+##### Telemetry Collection
 
 All pipeline telemetry flows to two complementary destinations, linked by `correlation_id` for end-to-end tracing:
 
@@ -359,7 +359,7 @@ All pipeline telemetry flows to two complementary destinations, linked by `corre
 
 The `correlation_id` traces to the originating Fabric pipeline execution, enabling the Diagnose Agent to correlate cascading failures (e.g., dlt failure causing downstream dbt failure) across the full pipeline chain.
 
-**Alerting**
+##### Alerting
 
 Alert routing is handled by the Alert Engine (see 6.2.6). Azure Monitor and Data Activator feed alerts through a webhook bridge into GitHub Issues, where Operator Agents act on them (see 3.4). Alert storms are deduplicated by the alert engine.
 
@@ -369,7 +369,7 @@ Browse, create, and manage the skills library. Skills are the domain memory of t
 
 The Skills UI uses the Retro Agent, which analyzes chat history and issues for a specific domain or source and recommends skill updates (see 6.3.5).
 
-**What Skills Contain**
+##### What Skills Contain
 
 | Knowledge Type | Examples |
 | -------- | -------- |
@@ -380,7 +380,7 @@ The Skills UI uses the Retro Agent, which analyzes chat history and issues for a
 
 As organizations get leaner, coordination overhead (reports, status updates, cross-team alignment) gets deleted — it doesn't transform, it disappears. Skills replace coordination with encoded knowledge: instead of asking Sarah why the pipeline was built that way, the agent reads the skill.
 
-**Skill Types**
+##### Skill Types
 
 | Type | Description | Managed By |
 | -------- | -------- | -------- |
@@ -389,7 +389,7 @@ As organizations get leaner, coordination overhead (reports, status updates, cro
 | Domain | Functional domains (e.g., pipeline analysis for tech services) | Community/Customer |
 | Source | Source-specific (e.g., Salesforce skills) | Community/Customer |
 
-**Governance Tiers**
+##### Governance Tiers
 
 Skills follow a tiering model to ensure reliability as the library grows:
 
@@ -400,7 +400,7 @@ Skills follow a tiering model to ensure reliability as the library grows:
 
 Customer-created skills (Domain and Source types) start at Community tier. The Retro Agent can recommend skill updates based on chat history and incident patterns, which are reviewed before promotion.
 
-**Distribution Model**
+##### Distribution Model
 
 Skills are stored in the domain or source repo's skills directory and follow the same version control practices as code. This enables:
 

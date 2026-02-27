@@ -52,7 +52,7 @@ Memory lives **in git, inside the domain's dbt project repository** — not in A
 
 The storage format is **markdown on `main`**, explicitly not JSON — chosen for human readability, diffability, and direct editability. The agent uses existing `file_read` / `file_write` tools with `git_commit` to persist. The directory structure is:
 
-```
+```text
 {domain_slug}/
   dbt_project/
   memory/
