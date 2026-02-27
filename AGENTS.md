@@ -25,10 +25,6 @@ cd app && npm install && npm run sidecar:build
 npm run dev                    # Dev mode (hot reload)
 npm run build                  # Production build
 
-# Verify before committing
-cd app && npx tsc --noEmit                                        # TypeScript check
-cargo check --manifest-path app/src-tauri/Cargo.toml             # Rust check
-
 # Frontend tests (run from app/)
 npm run test                   # All Vitest tests
 npm run test:unit              # Stores + lib tests only
@@ -90,8 +86,9 @@ Determine what you changed, then pick the right runner:
 | Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
 | Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
 | Bun sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
+| Python orchestrator / agents | `cd orchestrator && uv run pytest <module>` |
 | Shared infrastructure (test mocks, setup, tauri.ts) | `npm run test:all` |
-| Unsure | `npm run test:all` |
+| Unsure | `npm run test:all` (app) + `cd orchestrator && uv run pytest` |
 
 Run `npx tsc --noEmit` from `app/` first — catches type errors in files you didn't directly touch.
 
@@ -101,6 +98,15 @@ Update `app/tests/TEST_MANIFEST.md` when adding new Rust commands (add cargo fil
 new E2E spec files, or changing shared infrastructure. Frontend test mappings are handled
 automatically by `vitest --changed` and naming conventions.
 
+## Design Docs
+
+Design notes live in `docs/design/`. Each topic gets its own subdirectory with a `README.md`
+(e.g. `docs/design/orchestrator-design/README.md`). The index at `docs/design/README.md` must be
+updated when adding a new subdirectory.
+
+Write design docs concisely — state the decision and the reason, not the reasoning process. One
+sentence beats a paragraph. Avoid restating what the code already makes obvious.
+
 ## Code Style
 
 - Granular commits: one concern per commit, run tests before each
@@ -108,13 +114,38 @@ automatically by `vitest --changed` and naming conventions.
 - TypeScript strict mode, no `any`
 - Zustand stores: one file per store in `app/src/stores/`
 - Rust commands: one module per concern in `app/src-tauri/src/commands/`
+- Tailwind 4 + shadcn/ui for all UI — see `.claude/rules/frontend-design.md` (auto-loaded in `app/src/`)
 - **Error colors:** Always use `text-destructive` for error text — never hardcoded `text-red-*`
+- Verify before committing: `cd app && npx tsc --noEmit` (frontend) + `cargo check --manifest-path app/src-tauri/Cargo.toml` (backend)
 
 ## Issue Management
 
 - **PR title format:** `VU-XXX: short description`
 - **PR body link:** `Fixes VU-XXX`
 
+## Skills
+
+Use these repo-local skills when requests match:
+
+- `.claude/skills/create-linear-issue/SKILL.md` — create/log/file a Linear issue, bug, feature, or ticket decomposition
+- `.claude/skills/implement-linear-issue/SKILL.md` — implement/fix/work on a Linear issue (e.g. `VU-123`)
+- `.claude/skills/close-linear-issue/SKILL.md` — close/complete/ship/merge a Linear issue
+- `.claude/skills/tauri/SKILL.md` — Tauri-specific implementation or debugging
+- `.claude/skills/shadcn-ui/SKILL.md` — shadcn/ui component work
+
+## Logging
+
+Every new feature must include logging. Use `logging` module (Python), `log` crate (Rust), and
+`console.*` (frontend). Layer-specific rules are in the relevant `.claude/rules/` file.
+
+| Level | When to use |
+|---|---|
+| **error** | Operation failed, user impact likely |
+| **warn** | Unexpected but recoverable |
+| **info** | Key lifecycle events (command invoked, agent started, plan state changed) |
+| **debug** | Internal details useful only when troubleshooting |
+
 ## Gotchas
 
 - **Agent SDK has no team tools:** The Claude Agent SDK (Python) does NOT support TeamCreate, TaskCreate, or SendMessage. Use the `Task` tool for sub-agents. Multiple `Task` calls in the same turn run in parallel.
+- **Parallel worktrees:** `npm run dev` auto-assigns a free port — safe to run multiple Tauri instances simultaneously.
