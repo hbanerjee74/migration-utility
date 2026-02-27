@@ -1,0 +1,11 @@
+{
+  "name": "sidecar",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node ../scripts/build-sidecar.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.0.14"
+  }
+}
