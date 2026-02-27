@@ -1,42 +1,54 @@
 # Coding Conventions
 
-<!-- Project-wide coding standards. Auto-loaded by Claude Code. -->
+## Python (Orchestrator + Agents)
+
+- Files: `snake_case` (`candidacy_agent.py`, `plan_parser.py`)
+- Classes: `PascalCase` (`CandidacyAgent`, `PlanState`)
+- Functions/variables: `snake_case` (`get_stored_procs`, `artifact_tier`)
+- Constants: `UPPER_SNAKE_CASE` (`MAX_PARALLEL_AGENTS`, `PLAN_FILE`)
+- Type annotations required on all function signatures
+- Use `pathlib.Path`, not `os.path`
+- Never use bare `except:` — always catch specific exception types
+
+## TypeScript (Tauri Frontend)
+
+- Files: `kebab-case` (`scope-selector.tsx`, `candidacy-table.tsx`)
+- Components: `PascalCase` (`ScopeSelector`, `CandidacyTable`)
+- Functions/variables: `camelCase` (`getStoredProcs`, `artifactTier`)
+- Constants: `UPPER_SNAKE_CASE` (`MAX_TABLE_ROWS`)
+
+## Rust (Tauri Backend)
+
+- Follow standard Rust conventions (enforced by `clippy`)
+- Every `#[tauri::command]` logs `info!` on entry (with key params) and `error!` on failure
+- Use `thiserror` for error types; propagate with `?`
 
 ## Logging
 
-<!-- Uncomment and customize:
+### Python
 
-Every new feature must include logging. Use appropriate log levels:
+Use the `logging` module. One logger per module: `logger = logging.getLogger(__name__)`.
 
 | Level | When to use | Examples |
 |---|---|---|
-| **error** | Operation failed, user impact likely | DB write failed, API 5xx, file not found |
-| **warn** | Unexpected but recoverable | Retrying after failure, missing config (using default) |
-| **info** | Key lifecycle events | Command invoked, resource created/deleted, settings changed |
-| **debug** | Internal details for troubleshooting | Intermediate state, cache hits/misses, SQL queries |
+| `error` | Operation failed, user impact likely | Fabric API 5xx, dbt-core-mcp tool failure, plan.md write failed |
+| `warning` | Unexpected but recoverable | Missing ADF activity type (skipping), retrying after transient failure |
+| `info` | Key lifecycle events | Agent started, model tier classified, plan state changed, PR pushed |
+| `debug` | Intermediate state, tool calls, SQL fragments | Stored proc SQL extracted, lineage graph edge added |
 
-Rules:
 - Log on entry (with key params) and on failure. Use `debug` for intermediate steps.
-- Never log secrets (API keys, tokens).
-- Include context — `info("importing {} items from {}", count, source)` not just `info("importing")`.
--->
+- Never log secrets (API keys, tokens) or PII column values.
+- Include context: `logger.info("candidacy: classifying %d artifacts in domain %s", count, domain)` not just `logger.info("classifying")`.
+
+### Rust / Frontend
+
+- Every `#[tauri::command]` logs `info!` on entry and `error!` on failure.
+- Frontend: `console.log` for significant user actions (scope confirmed, migration triggered), `console.error` for caught errors. No render cycle or state read logging.
 
 ## Error Handling
 
-<!-- Define your error handling strategy. Example:
-
-- Validate at system boundaries (user input, external APIs)
-- Trust internal code and framework guarantees
-- Use typed errors, not string messages
-- Never swallow errors silently — log or propagate
--->
-
-## Naming
-
-<!-- Define naming conventions. Example:
-
-- Files: kebab-case (`user-profile.ts`)
-- Components: PascalCase (`UserProfile`)
-- Functions/variables: camelCase (`getUserProfile`)
-- Constants: UPPER_SNAKE_CASE (`MAX_RETRIES`)
--->
+- Validate at system boundaries: Fabric API responses, ADF JSON parsing, dbt-core-mcp tool results, plan.md reads
+- Trust internal Agent SDK guarantees — don't wrap them
+- Python: raise typed exceptions (`class CandidacyError(Exception): ...`), never swallow silently
+- TypeScript: typed errors from Tauri commands, surface to user via error state
+- Agent tool errors: log and mark the affected model `BLOCKED` in `plan.md` — don't crash the orchestrator

@@ -1,50 +1,58 @@
 # Migration Utility
 
-A migration utility that helps existing Microsoft Fabric customers adopt Vibedata as their agentic data engineering platform.
+Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fabric Warehouse stored procedures to dbt models on Vibedata's platform. Targets silver and gold transformations only (bronze is out of scope).
 
-<!-- Optional: import companion files for multi-component projects:
-@import CLAUDE-APP.md
--->
+## Architecture
 
-## Project Context
+| Component | What | Tech |
+|-----------|------|------|
+| Setup UI | Scope selection, candidacy review, table config (snapshot strategy, PII, incremental column). Persists state to SQLite; pushes finalized config to `plan.md` | Tauri + React/TypeScript + SQLite |
+| Orchestrator | Reads `plan.md`, builds dependency graph, spawns sub-agents in parallel, handles BLOCKED/RESOLVED | Python + Claude Agent SDK |
+| Sub-agents | Candidacy, Translation, Test Generator, Validation | Agent SDK `AgentDefinition` with scoped tools |
+| dbt interaction | Lineage, compiled SQL, model execution, validation queries | dbt-core-mcp (MCP server) |
+| Runtime | Headless execution, session resumption | GitHub Actions |
+| State | Progress, dependencies, start/stop resumption | `plan.md` in migration repo (git-backed) |
 
-You are a product design assistant for this migration utility. You have deep context on Vibedata's architecture, strategy, and personas from the project documents. You also have access to Google Drive and GitHub to pull in additional context when needed.
-
-### Your Role
-
-Help the product manager and engineering team think through the migration utility — from scope definition through user stories and requirements. This is a working tool for day-to-day brainstorming, not a formal documentation system. Be a thinking partner: challenge assumptions, surface gaps, propose alternatives, and push the work forward.
-
-### How You Work
-
-When given a topic or question, do the following: search Google Drive and GitHub for relevant context first (customer-facing docs, existing configs, prior decisions), then synthesize what you find with your Vibedata knowledge to produce something immediately useful. Don't just retrieve — reason about it.
-
-Adapt your output to what's actually needed in the moment:
-
-- Early exploration → brainstorm lists, open questions, scope options
-- Mid-stage → user stories, job stories, flow sketches in plain text
-- Late stage → structured requirements the engineering team can act on
-
-### Defaults
-
-- Always ground outputs in the two primary personas: Full-Stack Analyst (building pipelines) and Data Reliability Engineer (operating them)
-- Flag assumptions explicitly — especially around migration scope, since that's still being defined
-- When something is ambiguous, offer two or three concrete options rather than asking an open question
-- Keep things direct and skimmable; no padding
+**Source scope:** Fabric Warehouse (T-SQL stored procedures via ADF pipelines). Lakehouse/Spark is post-MVP.
 
 ## Dev Commands
 
 ```bash
-# Add your dev, build, and test commands here
+# Tauri app (run from app/)
+cd app && npm install
+npm run dev                    # Dev mode (hot reload)
+npm run build                  # Production build
+
+# Rust tests
+cd app/src-tauri && cargo test
+
+# Frontend tests
+cd app && npm run test:unit
+cd app && npm run test:e2e
+
+# Python orchestrator (run from orchestrator/)
+cd orchestrator && uv sync
+uv run pytest                  # All tests
+uv run pytest tests/unit       # Unit tests only
 ```
 
 ## Testing
 
 ### When to write tests
 
-1. New logic → unit tests
-2. New UI interaction → component tests
-3. New page or major flow → E2E tests (happy path)
-4. Bug fix → regression test
+**Tauri app:**
+
+1. New state logic (store actions, derived state) → store unit tests
+2. New Rust command with testable logic → `#[cfg(test)]` tests
+3. New UI interaction → component test
+4. New page or major flow → E2E test (happy path)
+5. Bug fix → regression test
+
+**Python orchestrator/agents:**
+
+1. New agent tool or orchestration logic → pytest unit test
+2. New `plan.md` parsing/state logic → pytest unit test
+3. Bug fix → regression test
 
 Purely cosmetic changes or simple wiring don't require tests. If unclear, ask the user.
 
@@ -61,9 +69,9 @@ Before writing any test code, read existing tests for the files you changed:
 
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
-- All markdown files must pass `markdownlint` — run it before committing any `.md` changes. Config is at `.markdownlint.json`.
+- All markdown files must pass `markdownlint` — run before committing any `.md` changes. Config at `.markdownlint.json`.
 
-<!-- Coding conventions (logging, naming, error handling) live in .claude/rules/coding-conventions.md -->
+<!-- Full conventions (logging, naming, error handling) in .claude/rules/coding-conventions.md -->
 
 ## Delegation Policy
 
@@ -73,21 +81,41 @@ Before writing any test code, read existing tests for the files you changed:
 |---|---|---|
 | Reasoning | sonnet | Planning, architecture, requirements drafting |
 | Implementation | default | Coding, exploration, review, merge |
-| Lightweight | haiku | API calls, status updates, simple lookups |
+| Lightweight | haiku | Linear API calls, status updates, simple lookups |
 
 ### Sub-agent rules
 
 - Scoped prompts with clear deliverables — prevent rabbit holes
+- Commit + push before reporting completion
 - Final response under 2000 characters — list outcomes, not process
+
+### Skill lifecycle
+
+Create → Implement → Close
+
+- `/create-linear-issue` — research, estimate, create issue(s). Can decompose into children.
+- `/implement-linear-issue` — plan, code, test, PR.
+- `/close-linear-issue` — verify tests, merge PR, move to Done, clean up.
 
 ## Gotchas
 
-<!-- List known footguns and non-obvious behaviors here. -->
+<!-- List known footguns here as they emerge. -->
 
 ## Custom Skills
 
-<!-- Register your skills here. Example:
+### /create-linear-issue
 
-### /my-skill
-When the user runs /my-skill or asks to do X, read and follow the skill at `.claude/skills/my-skill/SKILL.md`.
--->
+When the user runs /create-linear-issue or asks to create a Linear issue, log a bug, file a ticket,
+track a feature idea, or decompose an issue into smaller ones,
+read and follow the skill at `.claude/skills/create-linear-issue/SKILL.md`.
+
+### /implement-linear-issue
+
+When the user runs /implement-linear-issue, or mentions a Linear issue identifier (e.g. "MU-123"),
+or asks to implement, build, fix, or work on a Linear issue,
+read and follow the skill at `.claude/skills/implement-linear-issue/SKILL.md`.
+
+### /close-linear-issue
+
+When the user runs /close-linear-issue, or asks to close, complete, merge, or ship a Linear issue,
+read and follow the skill at `.claude/skills/close-linear-issue/SKILL.md`.
