@@ -21,16 +21,29 @@ Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fab
 
 ```bash
 # Tauri app (run from app/)
-cd app && npm install
+cd app && npm install && npm run sidecar:build
 npm run dev                    # Dev mode (hot reload)
 npm run build                  # Production build
 
-# Rust tests
-cd app/src-tauri && cargo test
+# Verify before committing
+cd app && npx tsc --noEmit                                        # TypeScript check
+cargo check --manifest-path app/src-tauri/Cargo.toml             # Rust check
 
-# Frontend tests
-cd app && npm run test:unit
-cd app && npm run test:e2e
+# Frontend tests (run from app/)
+npm run test                   # All Vitest tests
+npm run test:unit              # Stores + lib tests only
+npm run test:integration       # Component + page tests
+npm run test:e2e               # All Playwright E2E tests
+npm run test:e2e:workspace     # E2E filtered to @workspace tag
+npm run test:changed           # Changed files only (vitest --changed)
+npm run test:all               # Full suite (Vitest + Playwright)
+
+# Rust tests
+cargo test --manifest-path app/src-tauri/Cargo.toml              # all Rust tests
+cargo test --manifest-path app/src-tauri/Cargo.toml commands::workspace  # module filter
+
+# Sidecar tests (run from app/sidecar/)
+npx vitest run
 
 # Python orchestrator (run from orchestrator/)
 cd orchestrator && uv sync
@@ -67,15 +80,40 @@ Before writing any test code, read existing tests for the files you changed:
 3. Add new tests only for genuinely new behavior
 4. Never add tests just to increase count — every test must catch a real regression
 
+### Choosing which tests to run
+
+Determine what you changed, then pick the right runner:
+
+| What changed | Tests to run |
+|---|---|
+| Frontend store / hook | `npm run test:unit` |
+| Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
+| Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
+| Bun sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
+| Shared infrastructure (test mocks, setup, tauri.ts) | `npm run test:all` |
+| Unsure | `npm run test:all` |
+
+Run `npx tsc --noEmit` from `app/` first — catches type errors in files you didn't directly touch.
+
+### Updating the test manifest
+
+Update `app/tests/TEST_MANIFEST.md` when adding new Rust commands (add cargo filter + E2E tag),
+new E2E spec files, or changing shared infrastructure. Frontend test mappings are handled
+automatically by `vitest --changed` and naming conventions.
+
 ## Code Style
 
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
+- TypeScript strict mode, no `any`
+- Zustand stores: one file per store in `app/src/stores/`
+- Rust commands: one module per concern in `app/src-tauri/src/commands/`
+- **Error colors:** Always use `text-destructive` for error text — never hardcoded `text-red-*`
 
 ## Issue Management
 
-- **PR title format:** `MU-XXX: short description`
-- **PR body link:** `Fixes MU-XXX`
+- **PR title format:** `VU-XXX: short description`
+- **PR body link:** `Fixes VU-XXX`
 
 ## Gotchas
 

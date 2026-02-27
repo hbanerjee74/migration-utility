@@ -53,3 +53,10 @@ Cards use `shadow-sm` with `hover:shadow`. No heavy drop shadows. Dark mode pref
 ## Transitions
 
 Use `duration-150` (150ms) for micro interactions (hover, toggle). `duration-200` for standard transitions (expand/collapse). Easing: default ease-out.
+
+## Logging
+
+- `console.error()` for caught errors
+- `console.warn()` for unexpected states
+- `console.log()` for significant user actions (navigation, form submissions, migration triggered)
+- Do not log render cycles or state reads

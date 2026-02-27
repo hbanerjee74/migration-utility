@@ -18,5 +18,5 @@ git worktree add /Users/hbanerjee/src/worktrees/feature/<branch-name> <branch-na
 
 ## PR Format
 
-- Title: `MU-XXX: short description`
-- Body: `Fixes MU-XXX` (one line per issue for multi-issue PRs)
+- Title: `VU-XXX: short description`
+- Body: `Fixes VU-XXX` (one line per issue for multi-issue PRs)
