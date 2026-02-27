@@ -41,7 +41,7 @@ SQLite schema in place, mock data seeded, UI routing shell built, and first scre
    - `zustand`
 4. Initialise shadcn/ui: `npx shadcn@latest init`
    - Style: Default, Base colour: Neutral (starting point only — overridden in next step)
-5. Create `app/src/styles/globals.css` with AD brand CSS variables (from skill-builder):
+5. Create `app/src/styles/globals.css` with AD brand CSS variables:
    - Add AD brand primitives: `--color-seafoam`, `--color-pacific`, `--color-ocean`
    - Override shadcn/ui semantic variables to use AD brand colours:
      `--primary` → pacific, `--ring` → pacific, `--destructive` stays as-is
