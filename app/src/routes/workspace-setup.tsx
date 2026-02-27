@@ -3,6 +3,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router';
 import { useWorkflowStore } from '../stores/workflow-store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Workspace {
   id: string;
@@ -102,16 +105,15 @@ export default function WorkspaceSetup() {
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="workspace-name">
+          <Label htmlFor="workspace-name">
             Workspace name <span className="text-destructive">*</span>
-          </label>
-          <input
+          </Label>
+          <Input
             id="workspace-name"
             data-testid="input-workspace-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border rounded-md px-3 py-2 text-sm bg-background"
             placeholder="e.g. Acme Migration Q1"
           />
           {errors.name && (
@@ -120,27 +122,27 @@ export default function WorkspaceSetup() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="repo-path">
+          <Label htmlFor="repo-path">
             Migration repo path <span className="text-destructive">*</span>
-          </label>
+          </Label>
           <div className="flex gap-2">
-            <input
+            <Input
               id="repo-path"
               data-testid="input-repo-path"
               type="text"
               value={repoPath}
               onChange={(e) => setRepoPath(e.target.value)}
-              className="flex-1 border rounded-md px-3 py-2 text-sm bg-background"
+              className="flex-1"
               placeholder="/path/to/migration-repo"
             />
-            <button
+            <Button
               type="button"
               data-testid="btn-pick-directory"
+              variant="outline"
               onClick={pickDirectory}
-              className="border rounded-md px-3 py-2 text-sm"
             >
               Browse
-            </button>
+            </Button>
           </div>
           {errors.repoPath && (
             <p className="text-xs text-destructive" role="alert">{errors.repoPath}</p>
@@ -148,16 +150,15 @@ export default function WorkspaceSetup() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium" htmlFor="fabric-url">
+          <Label htmlFor="fabric-url">
             Fabric workspace URL <span className="text-muted-foreground text-xs">(optional)</span>
-          </label>
-          <input
+          </Label>
+          <Input
             id="fabric-url"
             data-testid="input-fabric-url"
             type="text"
             value={fabricUrl}
             onChange={(e) => setFabricUrl(e.target.value)}
-            className="border rounded-md px-3 py-2 text-sm bg-background"
             placeholder="https://app.fabric.microsoft.com/..."
           />
         </div>
@@ -166,27 +167,26 @@ export default function WorkspaceSetup() {
           <p className="text-xs text-destructive" role="alert">{submitError}</p>
         )}
 
-        <button
+        <Button
           type="submit"
           data-testid="btn-submit"
           disabled={submitting}
-          className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          style={{ background: 'var(--color-pacific)' }}
         >
           {submitting ? 'Saving…' : 'Continue'}
-        </button>
+        </Button>
       </form>
 
       {import.meta.env.DEV && (
         <div className="mt-8 pt-6 border-t border-dashed">
-          <button
+          <Button
             data-testid="btn-load-mock-data"
             onClick={handleSeedMockData}
             disabled={seeding}
-            className="text-sm text-muted-foreground underline disabled:opacity-50"
+            variant="ghost"
+            size="sm"
           >
             {seeding ? 'Loading…' : 'Load mock data'}
-          </button>
+          </Button>
           {seedError && (
             <p className="text-xs text-destructive mt-2" role="alert">{seedError}</p>
           )}

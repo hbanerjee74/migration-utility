@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router';
 import { Check, CircleDot } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   useWorkflowStore,
   WIZARD_STEPS,
@@ -28,11 +29,12 @@ export default function StepperNav() {
         const isCompleted = completedSteps.includes(step);
 
         return (
-          <button
+          <Button
             key={step}
             data-testid={`step-${step}`}
             onClick={() => handleStepClick(step)}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-left transition-colors duration-150"
+            variant="ghost"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-left justify-start transition-colors duration-150"
             style={isActive ? { backgroundColor: 'var(--muted)' } : undefined}
           >
             {isCompleted ? (
@@ -54,7 +56,7 @@ export default function StepperNav() {
             >
               {STEP_LABELS[step]}
             </span>
-          </button>
+          </Button>
         );
       })}
     </nav>
