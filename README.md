@@ -12,7 +12,7 @@ A Claude Code project bootstrapped from the [vibedata-utility-project-template](
 
 ## Project Structure
 
-```
+```text
 your-project/
 ├── .claude/
 │   ├── skills/              # Claude Code skills (slash commands)
@@ -59,6 +59,7 @@ your-project/
 ## Contributing
 
 This project supports AI-assisted development. Start with:
+
 - [`CLAUDE.md`](CLAUDE.md) for Claude Code sessions
 - [`AGENTS.md`](AGENTS.md) for Codex and other agents
 
