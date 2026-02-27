@@ -8,6 +8,7 @@ use std::sync::Mutex;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             use tauri::Manager;
             let db_path = app
@@ -38,6 +39,8 @@ pub fn run() {
             commands::migration::migration_save_table_config,
             commands::migration::migration_get_table_config,
             commands::plan::plan_serialize,
+            #[cfg(debug_assertions)]
+            commands::seed::seed_mock_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
