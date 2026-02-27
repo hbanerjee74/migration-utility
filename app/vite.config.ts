@@ -7,7 +7,7 @@ import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
 
   resolve: {
