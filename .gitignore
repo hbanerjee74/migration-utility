@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# Working directories (user-generated output)
+context/
+workflow-state.md
+
+# Test results
+test-results/
+playwright-report/
+playwright-artifacts/
+
+# Claude Code — ignore local config, track committed skills
+.claude/settings.json
+.claude/settings.local.json
+.claude/worktrees/
+
+# Environment
+.env
+.env.*
+!.env.example
