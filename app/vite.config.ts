@@ -7,6 +7,8 @@ import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 // @ts-expect-error process is a nodejs global
 const port = process.env.VITE_PORT ? parseInt(process.env.VITE_PORT) : 1420;
+// @ts-expect-error process is a nodejs global
+const isE2E = process.env.TAURI_E2E === "true";
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
@@ -15,6 +17,11 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // In E2E mode, replace Tauri invoke with mock responses
+      ...(isE2E && {
+        "@tauri-apps/api/core": path.resolve(__dirname, "./src/test/mocks/tauri-e2e.ts"),
+        "@tauri-apps/plugin-dialog": path.resolve(__dirname, "./src/test/mocks/tauri-e2e-dialog.ts"),
+      }),
     },
   },
 

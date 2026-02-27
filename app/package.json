@@ -8,7 +8,15 @@
     "dev:vite": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run src/__tests__/stores src/__tests__/lib src/__tests__/hooks",
+    "test:integration": "vitest run src/__tests__/components src/__tests__/pages",
+    "test:e2e": "playwright test",
+    "test:e2e:workspace": "playwright test --grep @workspace",
+    "test:changed": "vitest run --changed",
+    "test:all": "vitest run && playwright test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -18,18 +26,26 @@
     "lucide-react": "^0.575.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router": "^7.13.1",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.3.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/ui": "^4.0.18",
+    "jsdom": "^28.1.0",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   }
 }
