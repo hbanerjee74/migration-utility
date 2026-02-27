@@ -12,33 +12,20 @@
 
 ### Sub-agent rules
 
-- Scoped prompts with clear deliverables — prevent rabbit holes
-- Commit + push before reporting completion
-- Final response under 2000 characters — list outcomes, not process
-
-### Skill lifecycle
-
-Create → Implement → Close
-
-- `/create-linear-issue` — research, estimate, create issue(s). Can decompose into children.
-- `/implement-linear-issue` — plan, code, test, PR.
-- `/close-linear-issue` — verify tests, merge PR, move to Done, clean up.
+Commit + push before reporting completion.
 
 ## Custom Skills
 
 ### /create-linear-issue
 
-When the user runs /create-linear-issue or asks to create a Linear issue, log a bug, file a ticket,
-track a feature idea, or decompose an issue into smaller ones,
+When the user runs /create-linear-issue or asks to create a Linear issue, log a bug, file a ticket, track a feature idea, or decompose an issue into smaller ones,
 read and follow the skill at `.claude/skills/create-linear-issue/SKILL.md`.
 
 ### /implement-linear-issue
 
-When the user runs /implement-linear-issue, or mentions a Linear issue identifier (e.g. "MU-123"),
-or asks to implement, build, fix, or work on a Linear issue,
+When the user runs /implement-linear-issue, or mentions a Linear issue identifier (e.g. "MU-123"), or asks to implement, build, fix, or work on a Linear issue,
 read and follow the skill at `.claude/skills/implement-linear-issue/SKILL.md`.
 
 ### /close-linear-issue
 
-When the user runs /close-linear-issue, or asks to close, complete, merge, or ship a Linear issue,
-read and follow the skill at `.claude/skills/close-linear-issue/SKILL.md`.
+When the user runs /close-linear-issue, or asks to close, complete, merge, or ship a Linear issue, read and follow the skill at `.claude/skills/close-linear-issue/SKILL.md`.
