@@ -45,6 +45,14 @@ Use the `logging` module. One logger per module: `logger = logging.getLogger(__n
 - Every `#[tauri::command]` logs `info!` on entry and `error!` on failure.
 - Frontend: `console.log` for significant user actions (scope confirmed, migration triggered), `console.error` for caught errors. No render cycle or state read logging.
 
+## Markdown
+
+All `.md` files must pass `markdownlint` before committing. Config is at `.markdownlint.json`.
+
+```bash
+markdownlint <file-or-dir>
+```
+
 ## Error Handling
 
 - Validate at system boundaries: Fabric API responses, ADF JSON parsing, dbt-core-mcp tool results, plan.md reads

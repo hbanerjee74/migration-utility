@@ -69,7 +69,6 @@ Before writing any test code, read existing tests for the files you changed:
 
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
-- All markdown files must pass `markdownlint` — run before committing any `.md` changes. Config at `.markdownlint.json`.
 
 ## Gotchas
 
