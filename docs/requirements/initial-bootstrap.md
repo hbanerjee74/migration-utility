@@ -60,7 +60,7 @@ receive agent requests.
 ### Steps
 
 1. Create `app/sidecar/` directory with its own `package.json`
-2. Port from `~/src/skill-builder/app/sidecar/`:
+2. Create sidecar TypeScript files:
    - `agent-runner.ts` — entry point, SIGTERM/SIGINT handling, calls `runPersistent()`
    - `persistent-mode.ts` — stdin reader, message router, request multiplexer
    - `run-agent.ts` — calls `claude-agent-sdk` `query()`, streams responses
@@ -72,8 +72,8 @@ receive agent requests.
    - `"sidecar:install"`: `cd sidecar && bun install`
    - `"sidecar:build"`: `cd sidecar && bun install && bun run build`
    - `"postinstall"`: `cd sidecar && bun install`
-5. Create `app/src-tauri/src/agents/sidecar_pool.rs` — port from skill-builder:
-   - Swap Node binary reference for Bun standalone binary
+5. Create `app/src-tauri/src/agents/sidecar_pool.rs`:
+   - Uses Bun standalone binary as the sidecar runtime
    - `get_or_spawn()`, `do_spawn()`, `stdout_reader`, `stderr_reader`, `heartbeat_task`
    - Keep JSONL protocol identical: `agent_request`, `stream_start`, `sidecar_ready`
 6. Add Bun binaries to `tauri.conf.json` resources:
