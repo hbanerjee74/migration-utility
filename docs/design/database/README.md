@@ -39,8 +39,6 @@ One row per Fabric workspace connected to this app.
 |---|---|---|
 | `id` | TEXT PK | `WorkspaceInfo.id` (UUID) |
 | `display_name` | TEXT NOT NULL | `WorkspaceInfo.displayName` |
-| `capacity_id` | TEXT | `WorkspaceInfo.capacityId` |
-| `capacity_region` | TEXT | `WorkspaceInfo.capacityRegion` |
 | `migration_repo_path` | TEXT NOT NULL | Local path (FDE-provided) |
 | `created_at` | TEXT NOT NULL | App-generated timestamp |
 
@@ -55,17 +53,14 @@ All workspace-level Fabric items. One row per item regardless of type.
 | `display_name` | TEXT NOT NULL | `Item.displayName` |
 | `description` | TEXT | `Item.description` (optional) |
 | `folder_id` | TEXT | `Item.folderId` — null means workspace root |
-| `item_type` | TEXT NOT NULL | `Item.type` — see enum below |
-| `connection_string` | TEXT | `WarehouseProperties.connectionString` — Warehouse only (TDS endpoint) |
+| `item_type` | TEXT NOT NULL | `Item.type` — see CHECK below |
+| `connection_string` | TEXT | `WarehouseProperties.connectionString` — Warehouse only |
 | `collation_type` | TEXT | `WarehouseProperties.collationType` — Warehouse only |
 
 `item_type` CHECK: `'Warehouse' \| 'DataPipeline' \| 'Notebook'`
 
-> Extend the CHECK as support for additional item types is added.
-
-`connection_string` and `collation_type` are null for non-Warehouse items. Populated
-from `GET /warehouses/{warehouseId}` (the generic items endpoint does not return these
-fields).
+`connection_string` and `collation_type` are null for non-Warehouse rows. Populated
+from `GET /warehouses/{warehouseId}` — the generic items endpoint does not return them.
 
 ### `warehouse_schemas`
 
@@ -77,8 +72,8 @@ SELECT schema_id, name FROM sys.schemas
 
 | Column | Type | Source |
 |---|---|---|
-| `warehouse_item_id` | TEXT → `items.id` | — |
-| `schema_name` | TEXT | `sys.schemas.name` |
+| `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
+| `schema_name` | TEXT NOT NULL | `sys.schemas.name` |
 | `schema_id_local` | INTEGER | `sys.schemas.schema_id` — DB-scoped, not portable |
 
 PK: `(warehouse_item_id, schema_name)`
@@ -93,14 +88,14 @@ SELECT table_schema, table_name FROM INFORMATION_SCHEMA.TABLES
 
 | Column | Type | Source |
 |---|---|---|
-| `warehouse_item_id` | TEXT | — |
-| `schema_name` | TEXT | `INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA` |
-| `table_name` | TEXT | `INFORMATION_SCHEMA.TABLES.TABLE_NAME` |
+| `warehouse_item_id` | TEXT NOT NULL → `warehouse_schemas` | — |
+| `schema_name` | TEXT NOT NULL → `warehouse_schemas` | `INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA` |
+| `table_name` | TEXT NOT NULL | `INFORMATION_SCHEMA.TABLES.TABLE_NAME` |
 | `object_id_local` | INTEGER | `sys.objects.object_id` — DB-scoped, not portable |
 
 PK: `(warehouse_item_id, schema_name, table_name)`
 
-FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas`
+Composite FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas(warehouse_item_id, schema_name)`
 
 ### `warehouse_procedures`
 
@@ -114,15 +109,15 @@ SELECT routine_schema, routine_name, routine_definition
 
 | Column | Type | Source |
 |---|---|---|
-| `warehouse_item_id` | TEXT | — |
-| `schema_name` | TEXT | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_SCHEMA` |
-| `procedure_name` | TEXT | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_NAME` |
+| `warehouse_item_id` | TEXT NOT NULL → `warehouse_schemas` | — |
+| `schema_name` | TEXT NOT NULL → `warehouse_schemas` | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_SCHEMA` |
+| `procedure_name` | TEXT NOT NULL | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_NAME` |
 | `object_id_local` | INTEGER | `sys.objects.object_id` — DB-scoped, not portable |
 | `sql_body` | TEXT | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_DEFINITION` |
 
 PK: `(warehouse_item_id, schema_name, procedure_name)`
 
-FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas`
+Composite FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas(warehouse_item_id, schema_name)`
 
 ### `pipeline_activities`
 
@@ -176,7 +171,7 @@ Discovery agent output: which stored procedure writes to each selected table.
 | `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
 | `schema_name` | TEXT NOT NULL | — |
 | `procedure_name` | TEXT NOT NULL | — |
-| `pipeline_activity_id` | INTEGER → `pipeline_activities.id` | Null if procedure not found in any pipeline |
+| `pipeline_activity_id` | INTEGER → `pipeline_activities.id` | Null if not found in any pipeline |
 | `discovery_status` | TEXT NOT NULL | `resolved \| orphan \| duplicate_writer` |
 
 ### `candidacy`
@@ -223,8 +218,6 @@ CREATE TABLE schema_version (
 CREATE TABLE workspaces (
   id                  TEXT PRIMARY KEY,
   display_name        TEXT NOT NULL,
-  capacity_id         TEXT,
-  capacity_region     TEXT,
   migration_repo_path TEXT NOT NULL,
   created_at          TEXT NOT NULL
 );
@@ -330,20 +323,23 @@ CREATE TABLE table_config (
 
 ## Design Notes
 
+- **`warehouse_item_id` is always a FK to `items.id`** — used in every sub-warehouse
+  table as the level 2 anchor. In `warehouse_tables` and `warehouse_procedures` it is
+  part of a composite FK to `warehouse_schemas`, which itself references `items.id`.
+
 - **`object_id_local`** — `sys.objects.object_id` is scoped to the database instance.
   Stored as a lookup hint only. Never used as a cross-system key. Natural composite
   keys (item id + schema + object name) are the portable identifiers.
 
-- **`connection_string` and `collation_type` are on `items`** — nullable columns, only
-  set for Warehouse rows. Avoids a separate table and a JOIN every time the scanner
-  needs to connect to a warehouse.
+- **`connection_string` and `collation_type` on `items`** — nullable, only set for
+  Warehouse rows. Avoids a separate table and a JOIN every time the scanner needs the
+  TDS endpoint.
 
 - **`folder_id` null = workspace root** — the Fabric API omits `folderId` entirely
   for root-level items rather than returning null. Treat its absence as root placement.
 
-- **Pipeline activities reference warehouses via `target_warehouse_item_id`** — this
-  maps from `endpointitemId` in the pipeline JSON to `items.id`, linking activities
-  to the warehouse they operate on without leaving the items table.
+- **`target_warehouse_item_id` in `pipeline_activities`** — maps `endpointitemId` from
+  the pipeline JSON to `items.id`, linking each activity to the warehouse it targets.
 
 - **`candidacy` is keyed to the procedure** — one stored proc can write multiple
   tables, so candidacy classification lives at the procedure level, not the table level.
