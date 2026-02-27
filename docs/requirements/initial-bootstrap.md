@@ -40,11 +40,14 @@ SQLite schema in place, mock data seeded, UI routing shell built, and first scre
    - `@tanstack/react-router`, `@tanstack/router-devtools`
    - `zustand`
 4. Initialise shadcn/ui: `npx shadcn@latest init`
-   - Style: Default
-   - Base colour: Neutral
+   - Style: Default, Base colour: Neutral (starting point only — overridden in next step)
 5. Create `app/src/styles/globals.css` with AD brand CSS variables (from skill-builder):
-   - `--color-seafoam`, `--color-pacific`, `--color-ocean`
+   - Add AD brand primitives: `--color-seafoam`, `--color-pacific`, `--color-ocean`
+   - Override shadcn/ui semantic variables to use AD brand colours:
+     `--primary` → pacific, `--ring` → pacific, `--destructive` stays as-is
+   - Inter Variable (sans) + JetBrains Mono Variable (mono) as font stack
    - Light/dark mode via `@media (prefers-color-scheme: dark)`
+   - Reference: `.claude/rules/frontend-design.md` — all UI must follow these rules
 6. Verify: `npm run dev` boots, blank screen, no console errors, Tauri devtools open
 
 ---
