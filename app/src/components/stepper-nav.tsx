@@ -14,7 +14,6 @@ export default function StepperNav() {
 
   function handleStepClick(step: WizardStep) {
     if (completedSteps.includes(step)) {
-      console.log('navigate: step=%s', step);
       navigate(STEP_ROUTES[step]);
     }
   }

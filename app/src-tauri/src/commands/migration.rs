@@ -163,11 +163,13 @@ pub fn migration_list_candidacy(
         .prepare(
             "SELECT DISTINCT c.warehouse_item_id, c.schema_name, c.procedure_name, c.tier, c.reasoning, c.overridden, c.override_reason
              FROM candidacy c
-             INNER JOIN selected_tables st ON st.workspace_id = ?1
-             INNER JOIN table_artifacts ta ON ta.selected_table_id = st.id
-               AND ta.warehouse_item_id = c.warehouse_item_id
+             INNER JOIN table_artifacts ta
+               ON ta.warehouse_item_id = c.warehouse_item_id
                AND ta.schema_name = c.schema_name
-               AND ta.procedure_name = c.procedure_name",
+               AND ta.procedure_name = c.procedure_name
+             INNER JOIN selected_tables st
+               ON st.id = ta.selected_table_id
+               AND st.workspace_id = ?1",
         )
         .map_err(|e| {
             log::error!("migration_list_candidacy: failed to prepare query: {e}");

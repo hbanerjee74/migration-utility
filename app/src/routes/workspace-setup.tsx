@@ -23,6 +23,7 @@ export default function WorkspaceSetup() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   // On load: if workspace already exists, resume at last step
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function WorkspaceSetup() {
 
   async function handleSeedMockData() {
     setSeeding(true);
+    setSeedError(null);
     try {
       await invoke('seed_mock_data');
       const ws = await invoke<Workspace | null>('workspace_get');
@@ -85,6 +87,7 @@ export default function WorkspaceSetup() {
       }
     } catch (err) {
       console.error('seed_mock_data failed', err);
+      setSeedError(err instanceof Error ? err.message : String(err));
     } finally {
       setSeeding(false);
     }
@@ -184,6 +187,9 @@ export default function WorkspaceSetup() {
           >
             {seeding ? 'Loading…' : 'Load mock data'}
           </button>
+          {seedError && (
+            <p className="text-xs text-destructive mt-2" role="alert">{seedError}</p>
+          )}
         </div>
       )}
     </div>

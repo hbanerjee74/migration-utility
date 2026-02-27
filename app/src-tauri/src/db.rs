@@ -18,6 +18,7 @@ pub struct DbState(pub Mutex<Connection>);
 
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/001_initial_schema.sql")),
+    (2, include_str!("../migrations/002_add_fabric_url.sql")),
 ];
 
 pub fn open(path: &Path) -> Result<Connection, DbError> {
@@ -121,6 +122,6 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "schema_version should have exactly 1 row");
+        assert_eq!(count, 2, "schema_version should have exactly 2 rows");
     }
 }
