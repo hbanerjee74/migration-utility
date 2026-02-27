@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
+    log::info!("greet: name={name}");
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 

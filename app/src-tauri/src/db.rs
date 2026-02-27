@@ -48,11 +48,13 @@ fn run_migrations(conn: &Connection) -> Result<(), DbError> {
 
         if !already_applied {
             log::info!("db: applying migration {}", version);
-            conn.execute_batch(sql)?;
-            conn.execute(
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(sql)?;
+            tx.execute(
                 "INSERT INTO schema_version(version, applied_at) VALUES (?1, datetime('now'))",
                 [version],
             )?;
+            tx.commit()?;
         }
     }
     Ok(())
