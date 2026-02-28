@@ -3,7 +3,7 @@ use std::{fs, io::Write};
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
@@ -51,6 +51,20 @@ struct AgentRequest {
     config: SidecarConfigPayload,
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct MonitorStreamEvent {
+    request_id: String,
+    event_type: String,
+    content: Option<String>,
+    done: Option<bool>,
+    tool_name: Option<String>,
+    subtype: Option<String>,
+    total_cost_usd: Option<f64>,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+}
+
 #[tauri::command]
 pub async fn monitor_launch_agent(
     prompt: String,
@@ -96,7 +110,9 @@ pub async fn monitor_launch_agent(
     proc.stdin
         .write_all(format!("{request_json}\n").as_bytes())
         .await
-        .map_err(|e| format!("monitor_launch_agent: failed writing request to sidecar stdin: {e}"))?;
+        .map_err(|e| {
+            format!("monitor_launch_agent: failed writing request to sidecar stdin: {e}")
+        })?;
     proc.stdin
         .flush()
         .await
@@ -113,6 +129,7 @@ pub async fn monitor_launch_agent(
     {
         log::debug!("monitor_launch_agent[sidecar:stdout]: {}", line);
         append_request_scoped_sidecar_line(&log_path, request.id.as_str(), &line)?;
+        emit_monitor_stream_event(&app, request.id.as_str(), &line);
         match handle_sidecar_line(&line, request.id.as_str(), &mut aggregated)? {
             SidecarLineResult::Continue => continue,
             SidecarLineResult::Done => {
@@ -136,6 +153,88 @@ pub async fn monitor_launch_agent(
         Ok("Agent run completed with no text output".to_string())
     } else {
         Ok(aggregated)
+    }
+}
+
+fn emit_monitor_stream_event(app: &AppHandle, request_id: &str, line: &str) {
+    let parsed: Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let id = parsed
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| parsed.get("request_id").and_then(Value::as_str))
+        .unwrap_or_default();
+    if id != request_id {
+        return;
+    }
+
+    let message_type = parsed
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let payload = match message_type {
+        "agent_response" => MonitorStreamEvent {
+            request_id: request_id.to_string(),
+            event_type: "agent_response".to_string(),
+            content: parsed
+                .get("content")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string()),
+            done: parsed.get("done").and_then(Value::as_bool),
+            tool_name: None,
+            subtype: None,
+            total_cost_usd: None,
+            input_tokens: None,
+            output_tokens: None,
+        },
+        "agent_event" => {
+            let event = parsed.get("event").unwrap_or(&Value::Null);
+            let subtype = event
+                .get("type")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            MonitorStreamEvent {
+                request_id: request_id.to_string(),
+                event_type: "agent_event".to_string(),
+                content: None,
+                done: None,
+                tool_name: event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .map(|s| s.to_string()),
+                subtype,
+                total_cost_usd: event.get("total_cost_usd").and_then(Value::as_f64),
+                input_tokens: event
+                    .get("usage")
+                    .and_then(|u| u.get("input_tokens"))
+                    .and_then(Value::as_i64),
+                output_tokens: event
+                    .get("usage")
+                    .and_then(|u| u.get("output_tokens"))
+                    .and_then(Value::as_i64),
+            }
+        }
+        "error" | "agent_error" => MonitorStreamEvent {
+            request_id: request_id.to_string(),
+            event_type: "error".to_string(),
+            content: parsed
+                .get("message")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string()),
+            done: Some(true),
+            tool_name: None,
+            subtype: None,
+            total_cost_usd: None,
+            input_tokens: None,
+            output_tokens: None,
+        },
+        _ => return,
+    };
+
+    if let Err(e) = app.emit("monitor-agent-stream", payload) {
+        log::warn!("monitor_launch_agent: failed to emit monitor-agent-stream: {e}");
     }
 }
 
@@ -190,11 +289,9 @@ async fn ensure_sidecar_ready(slot: &mut Option<PersistentSidecar>) -> Result<()
     let mut stdout_reader = BufReader::new(stdout).lines();
     let mut ready_seen = false;
     for _ in 0..50 {
-        if let Some(line) = stdout_reader
-            .next_line()
-            .await
-            .map_err(|e| format!("monitor_launch_agent: failed reading sidecar startup line: {e}"))?
-        {
+        if let Some(line) = stdout_reader.next_line().await.map_err(|e| {
+            format!("monitor_launch_agent: failed reading sidecar startup line: {e}")
+        })? {
             log::debug!("monitor_launch_agent[sidecar:stdout]: {}", line);
             if parse_message_type(&line).as_deref() == Some("sidecar_ready") {
                 ready_seen = true;
@@ -245,7 +342,9 @@ fn transcript_config_line(config: &SidecarConfigPayload) -> String {
             "apiKey": "[REDACTED]",
             "cwd": config.cwd,
             "settingSources": ["project"],
-            "systemPromptPreset": "claude_code"
+            "systemPromptPreset": "claude_code",
+            "permissionMode": "bypassPermissions",
+            "allowDangerouslySkipPermissions": true
         }
     })
     .to_string()
@@ -404,7 +503,9 @@ fn handle_sidecar_line(
                 .or_else(|| parsed.get("error"))
                 .and_then(Value::as_str)
                 .unwrap_or("Unknown sidecar error");
-            Err(format!("monitor_launch_agent: sidecar agent error: {message}"))
+            Err(format!(
+                "monitor_launch_agent: sidecar agent error: {message}"
+            ))
         }
         _ => Ok(SidecarLineResult::Continue),
     }
@@ -427,7 +528,10 @@ mod tests {
             "/tmp/work".to_string(),
         );
         let json = serde_json::to_value(&req.config).unwrap();
-        assert_eq!(json.get("apiKey").and_then(|v| v.as_str()), Some("sk-ant-test"));
+        assert_eq!(
+            json.get("apiKey").and_then(|v| v.as_str()),
+            Some("sk-ant-test")
+        );
         assert_eq!(json.get("cwd").and_then(|v| v.as_str()), Some("/tmp/work"));
     }
 
@@ -442,8 +546,14 @@ mod tests {
         let line = transcript_config_line(&req.config);
         let json: serde_json::Value = serde_json::from_str(&line).unwrap();
         let cfg = json.get("config").unwrap();
-        assert_eq!(cfg.get("apiKey").and_then(|v| v.as_str()), Some("[REDACTED]"));
-        assert_eq!(cfg.get("prompt").and_then(|v| v.as_str()), Some("prompt body"));
+        assert_eq!(
+            cfg.get("apiKey").and_then(|v| v.as_str()),
+            Some("[REDACTED]")
+        );
+        assert_eq!(
+            cfg.get("prompt").and_then(|v| v.as_str()),
+            Some("prompt body")
+        );
         assert_eq!(cfg.get("cwd").and_then(|v| v.as_str()), Some("/tmp/work"));
     }
 
@@ -459,8 +569,12 @@ mod tests {
     fn handle_sidecar_line_aggregates_until_done() {
         let mut aggregated = String::new();
         let id = "agent-1";
-        let first = r#"{"type":"agent_response","request_id":"agent-1","content":"hello ","done":false}"#.to_string();
-        let second = r#"{"type":"agent_response","request_id":"agent-1","content":"world","done":true}"#.to_string();
+        let first =
+            r#"{"type":"agent_response","request_id":"agent-1","content":"hello ","done":false}"#
+                .to_string();
+        let second =
+            r#"{"type":"agent_response","request_id":"agent-1","content":"world","done":true}"#
+                .to_string();
 
         let r1 = handle_sidecar_line(&first, id, &mut aggregated).unwrap();
         let r2 = handle_sidecar_line(&second, id, &mut aggregated).unwrap();

@@ -68,3 +68,39 @@ export type GitHubAuthResult =
   | { status: 'pending' }
   | { status: 'slow_down' }
   | { status: 'success'; user: GitHubUser };
+
+export interface UsageSummary {
+  totalRuns: number;
+  completedRuns: number;
+  failedRuns: number;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
+export interface UsageRun {
+  runId: string;
+  transcriptPath: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  model: string;
+  totalCostUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolsUsed: string[];
+  skillsLoaded: string[];
+  preview: string;
+}
+
+export interface UsageEvent {
+  eventType: string;
+  label: string;
+  content: string;
+  timestampMs: number | null;
+}
+
+export interface UsageRunDetail {
+  run: UsageRun;
+  events: UsageEvent[];
+}

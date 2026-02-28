@@ -8,6 +8,8 @@ type ExtendedSessionOptions = SDKSessionOptions & {
   cwd: string;
   settingSources: Array<'project'>;
   systemPrompt: { type: 'preset'; preset: 'claude_code' };
+  permissionMode: 'bypassPermissions';
+  allowDangerouslySkipPermissions: boolean;
 };
 
 export function buildSessionOptions(config: SidecarConfig): ExtendedSessionOptions {
@@ -22,6 +24,9 @@ export function buildSessionOptions(config: SidecarConfig): ExtendedSessionOptio
     settingSources: ['project'],
     systemPrompt: { type: 'preset', preset: 'claude_code' },
     cwd: config.cwd,
+    // Non-interactive migration runs should never wait on permission prompts.
+    permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
     executable: 'node',
   };
 }
@@ -31,4 +36,3 @@ export function buildInitialPrompt(config: SidecarConfig): string {
   if (!system) return config.prompt;
   return `${system}\n\n${config.prompt}`;
 }
-

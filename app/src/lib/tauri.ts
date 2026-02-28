@@ -6,6 +6,9 @@ import type {
   GitHubAuthResult,
   GitHubRepo,
   GitHubUser,
+  UsageRun,
+  UsageRunDetail,
+  UsageSummary,
   Workspace,
 } from './types';
 
@@ -80,3 +83,12 @@ export const monitorLaunchAgent = (args: { prompt: string; systemPrompt?: string
     prompt: args.prompt,
     systemPrompt: args.systemPrompt ?? null,
   });
+
+export const usageGetSummary = () =>
+  invoke<UsageSummary>('usage_get_summary');
+
+export const usageListRuns = (limit = 50) =>
+  invoke<UsageRun[]>('usage_list_runs', { limit });
+
+export const usageGetRunDetail = (runId: string) =>
+  invoke<UsageRunDetail>('usage_get_run_detail', { runId });
