@@ -9,10 +9,8 @@ import { useWorkflowStore } from './stores/workflow-store';
 
 // Redirects based on app state on startup.
 function RootRedirect() {
-  const workspaceId = useWorkflowStore((s) => s.workspaceId);
   const migrationStatus = useWorkflowStore((s) => s.migrationStatus);
 
-  if (!workspaceId) return <Navigate to="/settings/workspace" replace />;
   if (migrationStatus === 'running') return <Navigate to="/monitor" replace />;
   return <Navigate to="/home" replace />;
 }
