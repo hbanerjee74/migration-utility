@@ -25,7 +25,7 @@ pub fn run() {
                 e
             })?;
             app.manage(db::DbState(Mutex::new(conn)));
-            agent_sources::deploy_on_startup(&app.handle()).map_err(|e| {
+            agent_sources::deploy_on_startup(app.handle()).map_err(|e| {
                 log::error!("agent_sources deploy failed on startup: {e}");
                 e
             })?;

@@ -221,10 +221,8 @@ fn clone_repo_if_needed(repo_name: &str, repo_path: &str, token: &str) -> Result
                 target.display()
             )));
         }
-    } else {
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(CommandError::from)?;
-        }
+    } else if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(CommandError::from)?;
     }
 
     let clone_url = format!(

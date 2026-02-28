@@ -1,5 +1,3 @@
-#![cfg(debug_assertions)]
-
 use rusqlite::params;
 use tauri::State;
 

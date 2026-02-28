@@ -3,7 +3,7 @@ use thiserror::Error;
 
 // ── App settings (persisted in the settings table) ────────────────────────────
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default)]
@@ -27,18 +27,6 @@ impl std::fmt::Debug for AppSettings {
             .field("github_user_avatar", &self.github_user_avatar)
             .field("github_user_email", &self.github_user_email)
             .finish()
-    }
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            anthropic_api_key: None,
-            github_oauth_token: None,
-            github_user_login: None,
-            github_user_avatar: None,
-            github_user_email: None,
-        }
     }
 }
 
