@@ -21,30 +21,19 @@ import { logger } from '@/lib/logger';
 
 const DEFAULT_WORKSPACE_NAME = 'Migration Workspace';
 
-type SourceType = 'sql_server' | 'fabric_warehouse';
+type SourceType = 'sql_server';
 type SourceAuthenticationMode = 'sql_password' | 'entra_service_principal';
 
-const SOURCE_DEFAULTS: Record<
-  SourceType,
-  {
-    port: number;
-    authenticationMode: SourceAuthenticationMode;
-    encrypt: boolean;
-    trustServerCertificate: boolean;
-  }
-> = {
-  sql_server: {
-    port: 1433,
-    authenticationMode: 'sql_password',
-    encrypt: true,
-    trustServerCertificate: false,
-  },
-  fabric_warehouse: {
-    port: 1433,
-    authenticationMode: 'entra_service_principal',
-    encrypt: true,
-    trustServerCertificate: false,
-  },
+const SOURCE_DEFAULTS: {
+  port: number;
+  authenticationMode: SourceAuthenticationMode;
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+} = {
+  port: 1433,
+  authenticationMode: 'sql_password',
+  encrypt: true,
+  trustServerCertificate: false,
 };
 
 function getErrorMessage(err: unknown): string {
@@ -77,18 +66,18 @@ export default function WorkspaceTab() {
   const [repoSelected, setRepoSelected] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
 
-  const [sourceType, setSourceType] = useState<SourceType>('fabric_warehouse');
+  const [sourceType] = useState<SourceType>('sql_server');
   const [sourceServer, setSourceServer] = useState('');
   const [sourceDatabase, setSourceDatabase] = useState('');
   const [sourceDatabases, setSourceDatabases] = useState<string[]>([]);
-  const [sourcePort, setSourcePort] = useState(String(SOURCE_DEFAULTS.fabric_warehouse.port));
+  const [sourcePort, setSourcePort] = useState(String(SOURCE_DEFAULTS.port));
   const [sourceAuthenticationMode, setSourceAuthenticationMode] =
-    useState<SourceAuthenticationMode>(SOURCE_DEFAULTS.fabric_warehouse.authenticationMode);
+    useState<SourceAuthenticationMode>(SOURCE_DEFAULTS.authenticationMode);
   const [sourceUsername, setSourceUsername] = useState('');
   const [sourcePassword, setSourcePassword] = useState('');
-  const [sourceEncrypt, setSourceEncrypt] = useState(SOURCE_DEFAULTS.fabric_warehouse.encrypt);
+  const [sourceEncrypt, setSourceEncrypt] = useState(SOURCE_DEFAULTS.encrypt);
   const [sourceTrustServerCertificate, setSourceTrustServerCertificate] = useState(
-    SOURCE_DEFAULTS.fabric_warehouse.trustServerCertificate,
+    SOURCE_DEFAULTS.trustServerCertificate,
   );
 
   const [errors, setErrors] = useState<{
@@ -123,9 +112,6 @@ export default function WorkspaceTab() {
       .then((ws) => {
         if (!ws) return;
 
-        const nextSourceType: SourceType = ws.sourceType ?? 'fabric_warehouse';
-        const nextDefaults = SOURCE_DEFAULTS[nextSourceType];
-
         setWorkspaceId(ws.id);
         setWorkspaceName(ws.displayName || DEFAULT_WORKSPACE_NAME);
         setRepoName(ws.migrationRepoName ?? '');
@@ -133,18 +119,17 @@ export default function WorkspaceTab() {
         setRepoSelected(Boolean(ws.migrationRepoName));
         setIsConfigured(Boolean(ws.migrationRepoName && ws.migrationRepoPath));
 
-        setSourceType(nextSourceType);
         setSourceServer(ws.sourceServer ?? '');
         const initialDatabase = ws.sourceDatabase ?? '';
         setSourceDatabase(initialDatabase);
         setSourceDatabases(initialDatabase ? [initialDatabase] : []);
-        setSourcePort(String(ws.sourcePort ?? nextDefaults.port));
-        setSourceAuthenticationMode(ws.sourceAuthenticationMode ?? nextDefaults.authenticationMode);
+        setSourcePort(String(ws.sourcePort ?? SOURCE_DEFAULTS.port));
+        setSourceAuthenticationMode(ws.sourceAuthenticationMode ?? SOURCE_DEFAULTS.authenticationMode);
         setSourceUsername(ws.sourceUsername ?? ws.fabricServicePrincipalId ?? '');
         setSourcePassword(ws.sourcePassword ?? ws.fabricServicePrincipalSecret ?? '');
-        setSourceEncrypt(ws.sourceEncrypt ?? nextDefaults.encrypt);
+        setSourceEncrypt(ws.sourceEncrypt ?? SOURCE_DEFAULTS.encrypt);
         setSourceTrustServerCertificate(
-          ws.sourceTrustServerCertificate ?? nextDefaults.trustServerCertificate,
+          ws.sourceTrustServerCertificate ?? SOURCE_DEFAULTS.trustServerCertificate,
         );
       })
       .catch((e) => logger.error('workspace_get failed', e));
@@ -197,16 +182,15 @@ export default function WorkspaceTab() {
     setRepoPath('');
     setRepoSelected(false);
 
-    setSourceType('fabric_warehouse');
     setSourceServer('');
     setSourceDatabase('');
     setSourceDatabases([]);
-    setSourcePort(String(SOURCE_DEFAULTS.fabric_warehouse.port));
-    setSourceAuthenticationMode(SOURCE_DEFAULTS.fabric_warehouse.authenticationMode);
+    setSourcePort(String(SOURCE_DEFAULTS.port));
+    setSourceAuthenticationMode(SOURCE_DEFAULTS.authenticationMode);
     setSourceUsername('');
     setSourcePassword('');
-    setSourceEncrypt(SOURCE_DEFAULTS.fabric_warehouse.encrypt);
-    setSourceTrustServerCertificate(SOURCE_DEFAULTS.fabric_warehouse.trustServerCertificate);
+    setSourceEncrypt(SOURCE_DEFAULTS.encrypt);
+    setSourceTrustServerCertificate(SOURCE_DEFAULTS.trustServerCertificate);
 
     setConnectionTestPassed(false);
     setTestConnectionMessage(null);
@@ -269,17 +253,6 @@ export default function WorkspaceTab() {
     setSelectedSuggestionIdx(-1);
   }
 
-  function handleSourceTypeChange(nextType: SourceType) {
-    const defaults = SOURCE_DEFAULTS[nextType];
-    setSourceType(nextType);
-    setSourcePort(String(defaults.port));
-    setSourceAuthenticationMode(defaults.authenticationMode);
-    setSourceEncrypt(defaults.encrypt);
-    setSourceTrustServerCertificate(defaults.trustServerCertificate);
-    setSourceDatabase('');
-    setSourceDatabases([]);
-  }
-
   function invalidateConnectionTestState() {
     if (connectionTestPassed) setConnectionTestPassed(false);
     if (testConnectionMessage) setTestConnectionMessage(null);
@@ -307,10 +280,8 @@ export default function WorkspaceTab() {
         migrationRepoName: repoName.trim(),
         migrationRepoPath: repoPath.trim(),
         fabricUrl: null,
-        fabricServicePrincipalId:
-          sourceType === 'fabric_warehouse' ? sourceUsernameValue || null : null,
-        fabricServicePrincipalSecret:
-          sourceType === 'fabric_warehouse' ? sourcePasswordValue || null : null,
+        fabricServicePrincipalId: null,
+        fabricServicePrincipalSecret: null,
         sourceType,
         sourceServer: sourceServerValue,
         sourceDatabase: sourceDatabaseValue,
@@ -454,15 +425,11 @@ export default function WorkspaceTab() {
                   id="source-type"
                   data-testid="select-source-type"
                   value={sourceType}
-                  onChange={(e) => {
-                    handleSourceTypeChange(e.target.value as SourceType);
-                    invalidateConnectionTestState();
-                  }}
+                  onChange={() => {}}
                   className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  disabled={pageLocked}
+                  disabled
                 >
                   <option value="sql_server">SQL Server</option>
-                  <option value="fabric_warehouse">Fabric Warehouse</option>
                 </select>
               </div>
             </div>
@@ -479,11 +446,7 @@ export default function WorkspaceTab() {
                     setSourceServer(e.target.value);
                     invalidateConnectionTestState();
                   }}
-                  placeholder={
-                    sourceType === 'fabric_warehouse'
-                      ? 'xxxx.datawarehouse.fabric.microsoft.com'
-                      : 'sqlserver.example.com'
-                  }
+                  placeholder="sqlserver.example.com"
                   className="font-mono text-sm"
                   disabled={pageLocked}
                 />
@@ -527,7 +490,7 @@ export default function WorkspaceTab() {
                   invalidateConnectionTestState();
                 }}
                 className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                disabled={pageLocked || sourceType === 'fabric_warehouse'}
+                disabled={pageLocked}
               >
                 <option value="sql_password">SQL Login</option>
                 <option value="entra_service_principal">Entra Service Principal</option>

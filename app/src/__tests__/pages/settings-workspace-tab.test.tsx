@@ -61,10 +61,10 @@ describe('WorkspaceTab (Settings)', () => {
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('workspace_discover_source_databases', {
         args: {
-          sourceType: 'fabric_warehouse',
+          sourceType: 'sql_server',
           sourceServer: 'sql.acme.local',
           sourcePort: 1433,
-          sourceAuthenticationMode: 'entra_service_principal',
+          sourceAuthenticationMode: 'sql_password',
           sourceUsername: 'sa',
           sourcePassword: 'secret',
           sourceEncrypt: true,
@@ -134,7 +134,6 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.selectOptions(screen.getByTestId('select-source-type'), 'sql_server');
     await user.type(screen.getByTestId('input-source-server'), 'sql.acme.local');
     await user.clear(screen.getByTestId('input-source-port'));
     await user.type(screen.getByTestId('input-source-port'), '1433');
@@ -157,6 +156,16 @@ describe('WorkspaceTab (Settings)', () => {
         },
       });
     });
+  });
+
+  it('shows SQL Server only in source type selector', () => {
+    renderPage();
+
+    const sourceTypeSelect = screen.getByTestId('select-source-type') as HTMLSelectElement;
+    expect(sourceTypeSelect).toBeDisabled();
+    expect(
+      Array.from(sourceTypeSelect.options).map((option) => option.value),
+    ).toEqual(['sql_server']);
   });
 
   it('enforces browse-only working folder input', async () => {
