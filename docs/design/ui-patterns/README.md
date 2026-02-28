@@ -13,6 +13,7 @@ Research-backed UI patterns for each screen in the Migration Utility Tauri app. 
 - [Candidacy Review](candidacy.md) — sortable/filterable table, tier badges, inline expansion, Sheet override drawer
 - [Table Config](table-config.md) — master-detail split, card-based form sections, agent suggestion indicators
 - [Launch Monitor](launch-monitor.md) — Airflow-style agent grid, log stream, partial failure handling
+- [Usage](usage.md) — Settings → Usage tab: cost summary cards, bar charts by table/phase, time series, expandable run history
 
 ---
 

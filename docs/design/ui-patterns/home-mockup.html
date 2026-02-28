@@ -363,7 +363,8 @@
     <button class="sw-btn"     onclick="show('scope', this); scopeLock(true)">Scope — Locked</button>
     <button class="sw-btn"     onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
     <button class="sw-btn"     onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
-    <button class="sw-btn"     onclick="show('settings', this)">Settings</button>
+    <button class="sw-btn"     onclick="show('settings', this); settingsTab('connections')">Settings</button>
+    <button class="sw-btn"     onclick="show('settings', this); settingsTab('usage')">Settings — Usage</button>
   </div>
 
   <div class="app">
@@ -807,6 +808,7 @@
             <button class="stab active" id="stab-connections" onclick="settingsTab('connections')">Connections</button>
             <button class="stab"        id="stab-workspace"   onclick="settingsTab('workspace')">Workspace</button>
             <button class="stab"        id="stab-reset"       onclick="settingsTab('reset')">Reset</button>
+            <button class="stab"        id="stab-usage"       onclick="settingsTab('usage')">Usage</button>
           </div>
 
           <!-- ── Connections tab ────────────────────────────
@@ -978,6 +980,192 @@
 
           </div>
 
+          <!-- ── Usage tab ─────────────────────────────────
+               Aggregated cost + token tracking per migration.
+               Breakdown dimensions: table, phase, model, day.
+          ─────────────────────────────────────────────── -->
+          <div id="stab-panel-usage" class="stab-panel" style="display:none;">
+
+            <!-- Filters -->
+            <div class="usage-filters">
+              <div class="usage-filter-chip">Table: All ▾</div>
+              <div class="usage-date-group">
+                <button class="usage-date-btn on">7d</button>
+                <button class="usage-date-btn">14d</button>
+                <button class="usage-date-btn">30d</button>
+                <button class="usage-date-btn">All</button>
+              </div>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--fg-muted); cursor:pointer; user-select:none;">
+                <input type="checkbox" style="accent-color:var(--pacific);"> Hide failed
+              </label>
+            </div>
+
+            <!-- Summary cards -->
+            <div class="usage-summary-grid">
+              <div class="card card-p">
+                <p class="text-xs text-muted">Total spent</p>
+                <p class="usage-stat">$4.82</p>
+              </div>
+              <div class="card card-p">
+                <p class="text-xs text-muted">Tables migrated</p>
+                <p class="usage-stat">14</p>
+              </div>
+              <div class="card card-p">
+                <p class="text-xs text-muted">Avg cost / table</p>
+                <p class="usage-stat">$0.34</p>
+              </div>
+            </div>
+
+            <!-- Bar charts: by table + by phase -->
+            <div class="usage-charts-grid">
+
+              <div class="card card-p">
+                <div class="section-label">Cost by Table</div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">fact_sales</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:100%"></div></div>
+                  <span class="usage-bar-cost">$1.24</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">silver_revenue</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:63%"></div></div>
+                  <span class="usage-bar-cost">$0.78</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">dim_customer</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:49%"></div></div>
+                  <span class="usage-bar-cost">$0.61</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">gold_summary</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:44%"></div></div>
+                  <span class="usage-bar-cost">$0.55</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">dim_product</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:34%"></div></div>
+                  <span class="usage-bar-cost">$0.42</span>
+                </div>
+              </div>
+
+              <div class="card card-p">
+                <div class="section-label">Cost by Phase</div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">Translation</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:100%"></div></div>
+                  <span class="usage-bar-cost">$2.91</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">Tests</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:48%"></div></div>
+                  <span class="usage-bar-cost">$1.40</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">Candidacy</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:11%"></div></div>
+                  <span class="usage-bar-cost">$0.31</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">Validation</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:5%"></div></div>
+                  <span class="usage-bar-cost">$0.14</span>
+                </div>
+                <div class="usage-bar-row">
+                  <span class="usage-bar-label">Discovery</span>
+                  <div class="usage-bar-track"><div class="usage-bar-fill" style="width:2%; min-width:3px;"></div></div>
+                  <span class="usage-bar-cost">$0.06</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Cost Over Time -->
+            <div class="card card-p mt0" style="margin-bottom:12px;">
+              <div class="row between" style="margin-bottom:10px;">
+                <div class="section-label" style="margin-bottom:0;">Cost Over Time</div>
+                <div style="display:flex; border:1px solid var(--border); border-radius:4px; overflow:hidden;">
+                  <button style="font-size:11px; padding:3px 9px; border:none; background:var(--pacific); color:#fff; cursor:pointer; font-family:var(--font-sans);">Cost</button>
+                  <button style="font-size:11px; padding:3px 9px; border:none; background:transparent; color:var(--fg-muted); cursor:pointer; font-family:var(--font-sans);">Tokens</button>
+                </div>
+              </div>
+              <!-- Bars: Feb 19-28. Max = $1.43 (Feb 26). Heights as % of max. -->
+              <div class="usage-time-chart">
+                <div class="usage-time-bar" style="height:2px; opacity:0.2;"></div><!-- Feb 19: $0 -->
+                <div class="usage-time-bar" style="height:8%;"></div><!-- Feb 20: $0.12 -->
+                <div class="usage-time-bar" style="height:2px; opacity:0.2;"></div><!-- Feb 21: $0 -->
+                <div class="usage-time-bar" style="height:2px; opacity:0.2;"></div><!-- Feb 22: $0 -->
+                <div class="usage-time-bar" style="height:17%;"></div><!-- Feb 23: $0.24 -->
+                <div class="usage-time-bar" style="height:59%;"></div><!-- Feb 24: $0.85 -->
+                <div class="usage-time-bar" style="height:71%;"></div><!-- Feb 25: $1.02 -->
+                <div class="usage-time-bar" style="height:100%;"></div><!-- Feb 26: $1.43 -->
+                <div class="usage-time-bar" style="height:62%;"></div><!-- Feb 27: $0.89 -->
+                <div class="usage-time-bar" style="height:19%;"></div><!-- Feb 28: $0.27 -->
+              </div>
+              <div class="usage-time-labels">
+                <span class="usage-time-label">19</span>
+                <span class="usage-time-label">20</span>
+                <span class="usage-time-label">21</span>
+                <span class="usage-time-label">22</span>
+                <span class="usage-time-label">23</span>
+                <span class="usage-time-label">24</span>
+                <span class="usage-time-label">25</span>
+                <span class="usage-time-label">26</span>
+                <span class="usage-time-label">27</span>
+                <span class="usage-time-label">28</span>
+              </div>
+            </div>
+
+            <!-- Recent Migration Runs -->
+            <div class="card">
+              <div style="padding:12px 16px 8px; border-bottom:1px solid var(--border);">
+                <div class="section-label" style="margin-bottom:0;">Recent Migration Runs</div>
+              </div>
+
+              <!-- Run 1 — Feb 28 (collapsed) -->
+              <div class="usage-run-row" onclick="toggleUsageRun('run-1')">
+                <svg class="usage-run-chevron" id="run-1-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                <span class="text-sm">Feb 28 2026 14:32</span>
+                <span class="text-xs text-muted" style="margin-left:auto;">14 tables</span>
+                <span class="font-mono text-sm" style="margin-left:12px; width:40px; text-align:right;">$4.82</span>
+                <span class="chip chip-green" style="margin-left:12px; font-size:10px;">completed</span>
+              </div>
+              <div id="run-1-detail" class="usage-run-detail" style="display:none; border-bottom:1px solid var(--border);">
+                <div class="usage-agent-row">
+                  <span class="font-mono text-xs" style="width:120px;">fact_sales</span>
+                  <span class="text-xs text-muted" style="width:80px;">translation</span>
+                  <span class="chip chip-green" style="font-size:10px;">completed</span>
+                  <span class="font-mono text-xs text-muted" style="margin-left:auto;">$0.92</span>
+                  <span class="font-mono text-xs text-subtle" style="margin-left:12px;">claude-sonnet-4-6</span>
+                </div>
+                <div class="usage-agent-row">
+                  <span class="font-mono text-xs" style="width:120px;">silver_revenue</span>
+                  <span class="text-xs text-muted" style="width:80px;">translation</span>
+                  <span class="chip chip-green" style="font-size:10px;">completed</span>
+                  <span class="font-mono text-xs text-muted" style="margin-left:auto;">$0.74</span>
+                  <span class="font-mono text-xs text-subtle" style="margin-left:12px;">claude-sonnet-4-6</span>
+                </div>
+                <div class="usage-agent-row">
+                  <span class="font-mono text-xs" style="width:120px;">dim_customer</span>
+                  <span class="text-xs text-muted" style="width:80px;">tests</span>
+                  <span class="chip chip-green" style="font-size:10px;">completed</span>
+                  <span class="font-mono text-xs text-muted" style="margin-left:auto;">$0.41</span>
+                  <span class="font-mono text-xs text-subtle" style="margin-left:12px;">claude-haiku-4-5</span>
+                </div>
+              </div>
+
+              <!-- Run 2 — Feb 24 (collapsed) -->
+              <div class="usage-run-row" style="border-bottom:none;" onclick="toggleUsageRun('run-2')">
+                <svg class="usage-run-chevron" id="run-2-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                <span class="text-sm">Feb 24 2026 09:15</span>
+                <span class="text-xs text-muted" style="margin-left:auto;">12 tables</span>
+                <span class="font-mono text-sm" style="margin-left:12px; width:40px; text-align:right;">$3.61</span>
+                <span class="chip chip-green" style="margin-left:12px; font-size:10px;">completed</span>
+              </div>
+              <div id="run-2-detail" class="usage-run-detail" style="display:none;"></div>
+            </div>
+
+          </div>
+
         </div>
 
       </div><!-- /content -->
@@ -987,6 +1175,112 @@
   <style>
     @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
     .mt0 { margin-top: 0; }
+
+    /* ── Usage tab ───────────────────────────────── */
+    .usage-filters {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 14px;
+    }
+    .usage-filter-chip {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      color: var(--fg);
+      cursor: pointer; user-select: none;
+    }
+    .usage-date-group {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .usage-date-btn {
+      font-family: var(--font-sans);
+      font-size: 12px; font-weight: 500;
+      padding: 5px 10px;
+      border: none; border-right: 1px solid var(--border);
+      background: var(--bg-card); color: var(--fg-muted);
+      cursor: pointer;
+    }
+    .usage-date-btn:last-child { border-right: none; }
+    .usage-date-btn.on { background: var(--pacific); color: #fff; }
+    .usage-summary-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px; margin-bottom: 12px;
+    }
+    .usage-stat {
+      font-size: 22px; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      margin-top: 6px; color: var(--fg);
+    }
+    .usage-charts-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 12px;
+    }
+    .usage-bar-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .usage-bar-row:last-child { margin-bottom: 0; }
+    .usage-bar-label {
+      width: 100px; flex-shrink: 0;
+      font-size: 11px; font-family: var(--font-mono);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: var(--fg);
+    }
+    .usage-bar-track {
+      flex: 1; height: 7px;
+      background: var(--bg-muted); border-radius: 999px; overflow: hidden;
+    }
+    .usage-bar-fill {
+      height: 100%; background: var(--pacific); border-radius: 999px;
+    }
+    .usage-bar-cost {
+      width: 40px; flex-shrink: 0;
+      font-size: 11px; font-family: var(--font-mono);
+      text-align: right; color: var(--fg-muted);
+    }
+    .usage-time-chart {
+      display: flex; align-items: flex-end; gap: 3px;
+      height: 52px; margin-bottom: 5px;
+    }
+    .usage-time-bar {
+      flex: 1; background: var(--pacific); border-radius: 2px 2px 0 0;
+      opacity: 0.85; min-height: 2px;
+    }
+    .usage-time-labels {
+      display: flex; gap: 3px;
+    }
+    .usage-time-label {
+      flex: 1; text-align: center;
+      font-size: 9px; color: var(--fg-subtle);
+    }
+    .usage-run-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .1s;
+    }
+    .usage-run-row:last-of-type { border-bottom: none; }
+    .usage-run-row:hover { background: var(--bg-muted); }
+    .usage-run-chevron {
+      color: var(--fg-subtle); flex-shrink: 0;
+      transition: transform .15s;
+    }
+    .usage-run-chevron.open { transform: rotate(90deg); }
+    .usage-run-detail {
+      background: var(--bg-muted);
+    }
+    .usage-agent-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 16px 6px 40px;
+      border-bottom: 1px solid var(--border);
+    }
+    .usage-agent-row:last-child { border-bottom: none; }
+    .mt14 { margin-top: 14px; }
 
     /* ── Settings tabs ───────────────────────────── */
     .stab {
@@ -1042,10 +1336,18 @@
     }
 
     function settingsTab(tab) {
-      ['connections', 'workspace', 'reset'].forEach(function(t) {
+      ['connections', 'workspace', 'reset', 'usage'].forEach(function(t) {
         document.getElementById('stab-' + t).classList.toggle('active', t === tab);
         document.getElementById('stab-panel-' + t).style.display = t === tab ? 'block' : 'none';
       });
+    }
+
+    function toggleUsageRun(id) {
+      var detail = document.getElementById(id + '-detail');
+      var chevron = document.getElementById(id + '-chevron');
+      var isOpen = detail.style.display !== 'none';
+      detail.style.display = isOpen ? 'none' : 'block';
+      chevron.classList.toggle('open', !isOpen);
     }
   </script>
 
