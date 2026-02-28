@@ -60,7 +60,7 @@ test.describe('Home — setup state @home', () => {
     await expect(page).toHaveURL(/\/settings/);
   });
 
-  test('root redirect sends unconfigured app to /home (setup state)', async ({ page }) => {
+  test('root redirect always lands on /home', async ({ page }) => {
     await seedStore(page, { workspaceId: null });
     await page.goto('/');
     await waitForAppReady(page);

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Check } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function ResetTab() {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export default function ResetTab() {
   function handleReset() {
     reset();
     navigate('/home');
-    console.info('migration: reset');
+    logger.info('migration: reset');
   }
 
   return (

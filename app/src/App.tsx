@@ -5,13 +5,9 @@ import HomeSurface from './routes/home';
 import ScopeSurface from './routes/scope/index';
 import MonitorSurface from './routes/monitor';
 import SettingsSurface from './routes/settings/index';
-import { useWorkflowStore } from './stores/workflow-store';
 
-// Redirects based on app state on startup.
+// Always land on home; HomeSurface decides what to show based on app state.
 function RootRedirect() {
-  const migrationStatus = useWorkflowStore((s) => s.migrationStatus);
-
-  if (migrationStatus === 'running') return <Navigate to="/monitor" replace />;
   return <Navigate to="/home" replace />;
 }
 

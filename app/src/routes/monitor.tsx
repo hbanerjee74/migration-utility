@@ -1,6 +1,7 @@
 import { Play, CheckCircle2, Loader2, Clock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
+import { logger } from '@/lib/logger';
 
 // ── Agent phases grid ─────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ export default function MonitorSurface() {
 
   function handleLaunch() {
     setMigrationStatus('running');
-    console.info('monitor: migration launched');
+    logger.info('monitor: migration launched');
   }
 
   return (

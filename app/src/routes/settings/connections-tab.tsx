@@ -1,8 +1,106 @@
+import { useState } from 'react';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Check } from 'lucide-react';
+import { logger, LOG_LEVELS, getStoredLogLevel, storeLogLevel, type LogLevel } from '@/lib/logger';
+
+// ── Level button colours ──────────────────────────────────────────────────────
+
+const LEVEL_STYLE: Record<LogLevel, { active: React.CSSProperties; label: string }> = {
+  debug: {
+    active: { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)' },
+    label: 'Debug',
+  },
+  info: {
+    active: {
+      backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 85%)',
+      color: 'var(--color-pacific)',
+      borderColor: 'color-mix(in oklch, var(--color-pacific), transparent 60%)',
+    },
+    label: 'Info',
+  },
+  warn: {
+    active: { backgroundColor: 'rgb(255 251 235)', color: 'rgb(146 64 14)' },
+    label: 'Warn',
+  },
+  error: {
+    active: {
+      backgroundColor: 'color-mix(in oklch, var(--destructive), transparent 88%)',
+      color: 'var(--destructive)',
+      borderColor: 'color-mix(in oklch, var(--destructive), transparent 60%)',
+    },
+    label: 'Error',
+  },
+};
+
+function LogLevelCard() {
+  const [level, setLevel] = useState<LogLevel>(() => getStoredLogLevel());
+
+  function handleChange(next: LogLevel) {
+    storeLogLevel(next);
+    setLevel(next);
+    logger.info(`logging: level changed to ${next}`);
+  }
+
+  function handleTestLogs() {
+    logger.debug('logging: test debug message');
+    logger.info('logging: test info message');
+    logger.warn('logging: test warn message');
+    logger.error('logging: test error message');
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">Logging</CardTitle>
+        <CardDescription className="text-xs mt-0.5">
+          Minimum level emitted to the browser console. Messages below this level are suppressed.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-0 flex flex-col gap-3">
+        {/* Level picker */}
+        <div className="flex gap-1.5" role="group" aria-label="Log level">
+          {LOG_LEVELS.map((l) => {
+            const isActive = l === level;
+            return (
+              <button
+                key={l}
+                type="button"
+                data-testid={`select-log-level-${l}`}
+                data-active={String(isActive)}
+                onClick={() => handleChange(l)}
+                className="px-3 py-1 text-xs font-medium rounded-md border transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                style={isActive ? LEVEL_STYLE[l].active : undefined}
+              >
+                {LEVEL_STYLE[l].label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Test button */}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="btn-fire-test-logs"
+            onClick={handleTestLogs}
+            className="text-xs"
+          >
+            Fire test logs
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Opens DevTools console to see output
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Connections tab ───────────────────────────────────────────────────────────
 
 export default function ConnectionsTab() {
   const migrationStatus = useWorkflowStore((s) => s.migrationStatus);
@@ -70,6 +168,9 @@ export default function ConnectionsTab() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Log level */}
+      <LogLevelCard />
     </div>
   );
 }

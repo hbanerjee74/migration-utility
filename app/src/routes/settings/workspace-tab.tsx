@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import TabLayout from '@/components/tab-layout';
 import { useAutosave } from '@/hooks/use-autosave';
+import { logger } from '@/lib/logger';
 
 interface Workspace {
   id: string;
@@ -41,7 +42,7 @@ export default function WorkspaceTab() {
         setRepoPath(ws.migrationRepoPath);
         setFabricUrl(ws.fabricUrl ?? '');
       }
-    }).catch((e) => console.error('workspace_get failed', e));
+    }).catch((e) => logger.error('workspace_get failed', e));
   }, []);
 
   // Autosave: debounced save on field changes (no workspace_update yet).
@@ -82,9 +83,9 @@ export default function WorkspaceTab() {
         setExistingId(ws.id);
         setWorkspaceId(ws.id);
       }
-      console.info('workspace: applied');
+      logger.info('workspace: applied');
     } catch (err) {
-      console.error('workspace apply failed', err);
+      logger.error('workspace apply failed', err);
       setApplyError(err instanceof Error ? err.message : String(err));
     } finally {
       setApplying(false);
@@ -105,7 +106,7 @@ export default function WorkspaceTab() {
         setFabricUrl(ws.fabricUrl ?? '');
       }
     } catch (err) {
-      console.error('seed_mock_data failed', err);
+      logger.error('seed_mock_data failed', err);
       setSeedError(err instanceof Error ? err.message : String(err));
     } finally {
       setSeeding(false);
