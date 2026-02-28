@@ -3,6 +3,7 @@ import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Check } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import SettingsPanelShell from '@/components/settings/settings-panel-shell';
 
 export default function ResetTab() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export default function ResetTab() {
   }
 
   return (
-    <div className="p-8 max-w-lg">
+    <SettingsPanelShell panelTestId="settings-panel-reset">
       <div
         className="rounded-lg border p-5 flex flex-col gap-4"
         style={{ borderColor: 'color-mix(in oklch, var(--destructive), transparent 60%)' }}
@@ -31,7 +32,7 @@ export default function ResetTab() {
         </p>
 
         {/* What gets cleared */}
-        <div className="rounded-md bg-muted/60 px-4 py-3 text-xs text-muted-foreground flex flex-col gap-1.5">
+        <div className="rounded-md bg-muted/60 px-4 py-3 text-sm text-muted-foreground flex flex-col gap-1.5">
           <p className="font-medium text-foreground">What gets cleared:</p>
           <ul className="list-disc pl-4 flex flex-col gap-1">
             <li>All scope, candidacy, and table config selections</li>
@@ -42,7 +43,7 @@ export default function ResetTab() {
 
         {/* What's kept */}
         <div
-          className="rounded-md px-4 py-3 text-xs flex flex-col gap-1.5"
+          className="rounded-md px-4 py-3 text-sm flex flex-col gap-1.5"
           style={{ backgroundColor: 'color-mix(in oklch, var(--color-seafoam), transparent 90%)' }}
         >
           <p className="font-medium flex items-center gap-1.5">
@@ -53,7 +54,7 @@ export default function ResetTab() {
         </div>
 
         {isLocked && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
             Cannot reset while a migration is running.
           </p>
         )}
@@ -68,6 +69,6 @@ export default function ResetTab() {
           Reset migration and start fresh
         </Button>
       </div>
-    </div>
+    </SettingsPanelShell>
   );
 }

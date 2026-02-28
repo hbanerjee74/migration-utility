@@ -1,89 +1,131 @@
-import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { Lock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import TabLayout from '@/components/tab-layout';
-import { useAutosave } from '@/hooks/use-autosave';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import SettingsPanelShell from '@/components/settings/settings-panel-shell';
+import { githubListRepos, workspaceApplyAndClone, workspaceGet } from '@/lib/tauri';
+import type { GitHubRepo } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
-interface Workspace {
-  id: string;
-  displayName: string;
-  migrationRepoPath: string;
-  fabricUrl?: string;
-  createdAt: string;
-}
+const DEFAULT_WORKSPACE_NAME = 'Migration Workspace';
 
 export default function WorkspaceTab() {
   const { setWorkspaceId, migrationStatus } = useWorkflowStore();
-
   const isLocked = migrationStatus === 'running';
 
-  const [name, setName] = useState('');
+  const [workspaceName, setWorkspaceName] = useState(DEFAULT_WORKSPACE_NAME);
+  const [repoName, setRepoName] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [fabricUrl, setFabricUrl] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; repoPath?: string }>({});
+  const [fabricServicePrincipalId, setFabricServicePrincipalId] = useState('');
+  const [fabricServicePrincipalSecret, setFabricServicePrincipalSecret] = useState('');
+  const [errors, setErrors] = useState<{ repoName?: string; repoPath?: string }>({});
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [seedError, setSeedError] = useState<string | null>(null);
-  const [existingId, setExistingId] = useState<string | null>(null);
 
-  // On mount: populate form with any previously saved workspace.
+  const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(-1);
+  const suggestReqIdRef = useRef(0);
+  const repoSuggestionsListboxId = useId();
+
   useEffect(() => {
-    invoke<Workspace | null>('workspace_get').then((ws) => {
-      if (ws) {
-        setExistingId(ws.id);
-        setWorkspaceId(ws.id);
-        setName(ws.displayName);
-        setRepoPath(ws.migrationRepoPath);
-        setFabricUrl(ws.fabricUrl ?? '');
-      }
-    }).catch((e) => logger.error('workspace_get failed', e));
-  }, []);
+    workspaceGet()
+      .then((ws) => {
+        if (ws) {
+          setWorkspaceId(ws.id);
+          setWorkspaceName(ws.displayName || DEFAULT_WORKSPACE_NAME);
+          setRepoName(ws.migrationRepoName ?? '');
+          setRepoPath(ws.migrationRepoPath ?? '');
+          setFabricUrl(ws.fabricUrl ?? '');
+          setFabricServicePrincipalId(ws.fabricServicePrincipalId ?? '');
+          setFabricServicePrincipalSecret(ws.fabricServicePrincipalSecret ?? '');
+        }
+      })
+      .catch((e) => logger.error('workspace_get failed', e));
+  }, [setWorkspaceId]);
 
-  // Autosave: debounced save on field changes (no workspace_update yet).
-  const { status: autosaveStatus, flush: flushAutosave } = useAutosave(
-    { name, repoPath, fabricUrl },
-    async () => {
-      // No-op until workspace_update is implemented.
-    },
+  useEffect(() => {
+    const query = repoName.trim();
+    if (query.length < 2) {
+      setRepoSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+
+    const requestId = ++suggestReqIdRef.current;
+    setSuggestionsLoading(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const repos = await githubListRepos(query, 10);
+        if (requestId === suggestReqIdRef.current) {
+          setRepoSuggestions(repos);
+          setSelectedSuggestionIdx(-1);
+        }
+      } catch {
+        if (requestId === suggestReqIdRef.current) {
+          setRepoSuggestions([]);
+        }
+      } finally {
+        if (requestId === suggestReqIdRef.current) {
+          setSuggestionsLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [repoName]);
+
+  const showSuggestions = useMemo(
+    () => suggestionsOpen && !isLocked && (suggestionsLoading || repoSuggestions.length > 0),
+    [suggestionsOpen, isLocked, suggestionsLoading, repoSuggestions.length],
   );
+  const activeSuggestionId =
+    selectedSuggestionIdx >= 0 ? `${repoSuggestionsListboxId}-option-${selectedSuggestionIdx}` : undefined;
+
+  function validate(): boolean {
+    const errs: { repoName?: string; repoPath?: string } = {};
+    if (!repoName.trim()) errs.repoName = 'Repo name is required';
+    else if (!repoName.includes('/')) errs.repoName = 'Repo name must be owner/repo';
+    if (!repoPath.trim()) errs.repoPath = 'Repo path is required';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   async function pickDirectory() {
     const selected = await openDialog({ directory: true, multiple: false });
     if (typeof selected === 'string') setRepoPath(selected);
   }
 
-  function validate(): boolean {
-    const errs: { name?: string; repoPath?: string } = {};
-    if (!name.trim()) errs.name = 'Workspace name is required';
-    if (!repoPath.trim()) errs.repoPath = 'Migration repo path is required';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+  function applySuggestion(repo: GitHubRepo) {
+    setRepoName(repo.fullName);
+    setSuggestionsOpen(false);
+    setRepoSuggestions([]);
+    setSelectedSuggestionIdx(-1);
   }
 
   async function handleApply() {
     if (!validate()) return;
-    flushAutosave();
+
     setApplying(true);
     setApplyError(null);
     try {
-      if (!existingId) {
-        const ws = await invoke<Workspace>('workspace_create', {
-          args: {
-            name: name.trim(),
-            migrationRepoPath: repoPath.trim(),
-            fabricUrl: fabricUrl.trim() || null,
-          },
-        });
-        setExistingId(ws.id);
-        setWorkspaceId(ws.id);
-      }
-      logger.info('workspace: applied');
+      const ws = await workspaceApplyAndClone({
+        name: workspaceName.trim() || DEFAULT_WORKSPACE_NAME,
+        migrationRepoName: repoName.trim(),
+        migrationRepoPath: repoPath.trim(),
+        fabricUrl: fabricUrl.trim() || null,
+        fabricServicePrincipalId: fabricServicePrincipalId.trim() || null,
+        fabricServicePrincipalSecret: fabricServicePrincipalSecret.trim() || null,
+      });
+      setWorkspaceId(ws.id);
+      setWorkspaceName(ws.displayName);
+      logger.info('workspace: applied and repo cloned');
     } catch (err) {
       logger.error('workspace apply failed', err);
       setApplyError(err instanceof Error ? err.message : String(err));
@@ -92,131 +134,235 @@ export default function WorkspaceTab() {
     }
   }
 
-  async function handleSeedMockData() {
-    setSeeding(true);
-    setSeedError(null);
-    try {
-      await invoke('seed_mock_data');
-      const ws = await invoke<Workspace | null>('workspace_get');
-      if (ws) {
-        setExistingId(ws.id);
-        setWorkspaceId(ws.id);
-        setName(ws.displayName);
-        setRepoPath(ws.migrationRepoPath);
-        setFabricUrl(ws.fabricUrl ?? '');
-      }
-    } catch (err) {
-      logger.error('seed_mock_data failed', err);
-      setSeedError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSeeding(false);
-    }
-  }
-
   return (
-    <div data-testid="settings-workspace-tab">
-      {isLocked && (
-        <div className="px-8 pt-4">
-          <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+    <SettingsPanelShell
+      panelTestId="settings-panel-workspace"
+      labelTestId="settings-workspace-group-label"
+      groupLabel={
+        <span className="inline-flex items-center gap-1.5">
+          {isLocked ? <Lock className="size-3" /> : null}
+          {isLocked ? 'Locked during active migration · Reset to change' : 'Set once per migration'}
+        </span>
+      }
+    >
+      <div data-testid="settings-workspace-tab" className="flex flex-col gap-3">
+        {isLocked ? (
+          <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
             Locked during active migration. Changes are not saved while a migration is running.
           </p>
-        </div>
-      )}
-      <TabLayout
-        title="Workspace"
-        description="Configure your migration workspace settings."
-        onApply={handleApply}
-        isApplying={applying}
-        canApply={!isLocked}
-        autosaveStatus={autosaveStatus}
-      >
-        <div className="max-w-lg flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="workspace-name">
-              Workspace name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="workspace-name"
-              data-testid="input-workspace-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Acme Migration Q1"
-              disabled={isLocked}
-            />
-            {errors.name && (
-              <p className="text-xs text-destructive" role="alert">{errors.name}</p>
-            )}
-          </div>
+        ) : null}
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="repo-path">
-              Migration repo path <span className="text-destructive">*</span>
-            </Label>
-            <div className="flex gap-2">
+        <Card className="gap-0 py-5" data-testid="settings-workspace-fabric-card">
+          <CardHeader className="pb-3">
+            <CardTitle>Fabric workspace</CardTitle>
+            <CardDescription className="mt-0.5">
+              The source Fabric workspace containing the stored procedures to migrate.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="fabric-url">Workspace URL</Label>
               <Input
-                id="repo-path"
-                data-testid="input-repo-path"
+                id="fabric-url"
+                data-testid="input-fabric-url"
                 type="text"
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-                className="flex-1"
-                placeholder="/path/to/migration-repo"
+                value={fabricUrl}
+                onChange={(e) => setFabricUrl(e.target.value)}
+                placeholder="https://app.fabric.microsoft.com/groups/..."
+                className="font-mono text-sm"
                 disabled={isLocked}
               />
-              <Button
-                type="button"
-                data-testid="btn-pick-directory"
-                variant="outline"
-                onClick={pickDirectory}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="fabric-sp-id" className="text-sm text-muted-foreground">
+                  Service principal ID
+                </Label>
+                <Input
+                  id="fabric-sp-id"
+                  data-testid="input-fabric-service-principal-id"
+                  type="text"
+                  value={fabricServicePrincipalId}
+                  onChange={(e) => setFabricServicePrincipalId(e.target.value)}
+                  placeholder="sp-vibedata-migration"
+                  className="font-mono text-sm"
+                  disabled={isLocked}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="fabric-secret" className="text-sm text-muted-foreground">
+                  Secret
+                </Label>
+                <Input
+                  id="fabric-secret"
+                  data-testid="input-fabric-secret"
+                  type="password"
+                  value={fabricServicePrincipalSecret}
+                  onChange={(e) => setFabricServicePrincipalSecret(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="font-mono text-sm"
+                  disabled={isLocked}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-0 py-5" data-testid="settings-workspace-repo-card">
+          <CardHeader className="pb-3">
+            <CardTitle>Migration repo</CardTitle>
+            <CardDescription className="mt-0.5">
+              The GitHub repo where migration state and agent outputs are committed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 flex flex-col gap-3">
+            <div className="flex flex-col gap-1 relative">
+              <Label htmlFor="repo-name">
+                Repo name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="repo-name"
+                data-testid="input-repo-name"
+                type="text"
+                value={repoName}
+                onChange={(e) => setRepoName(e.target.value)}
+                onFocus={() => setSuggestionsOpen(true)}
+                onBlur={() => {
+                  setTimeout(() => setSuggestionsOpen(false), 120);
+                }}
+                onKeyDown={(e) => {
+                  if (!showSuggestions || repoSuggestions.length === 0) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedSuggestionIdx((idx) => Math.min(idx + 1, repoSuggestions.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedSuggestionIdx((idx) => (idx <= 0 ? repoSuggestions.length - 1 : idx - 1));
+                  } else if (e.key === 'Enter' && selectedSuggestionIdx >= 0) {
+                    e.preventDefault();
+                    applySuggestion(repoSuggestions[selectedSuggestionIdx]);
+                  } else if (e.key === 'Escape') {
+                    setSuggestionsOpen(false);
+                    setSelectedSuggestionIdx(-1);
+                  }
+                }}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showSuggestions}
+                aria-controls={showSuggestions ? repoSuggestionsListboxId : undefined}
+                aria-activedescendant={showSuggestions ? activeSuggestionId : undefined}
+                placeholder="owner/repo"
+                className="font-mono text-sm"
                 disabled={isLocked}
-              >
-                Browse
-              </Button>
+              />
+
+              {showSuggestions ? (
+                <ul
+                  role="listbox"
+                  id={repoSuggestionsListboxId}
+                  aria-label="Repository suggestions"
+                  className="absolute top-[66px] left-0 right-0 z-20 max-h-44 overflow-auto rounded-md border border-border bg-background shadow-sm"
+                  data-testid="repo-suggestions"
+                >
+                  {suggestionsLoading ? (
+                    <li role="status" aria-live="polite" className="px-3 py-2 text-sm text-muted-foreground">
+                      Loading repos…
+                    </li>
+                  ) : (
+                    repoSuggestions.map((repo, idx) => (
+                      <li key={repo.id} role="none">
+                        <button
+                          id={`${repoSuggestionsListboxId}-option-${idx}`}
+                          role="option"
+                          aria-selected={idx === selectedSuggestionIdx}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-muted ${idx === selectedSuggestionIdx ? 'bg-muted' : ''}`}
+                          data-testid={`repo-suggestion-${idx}`}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onMouseEnter={() => setSelectedSuggestionIdx(idx)}
+                          onClick={() => applySuggestion(repo)}
+                        >
+                          {repo.fullName}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              ) : null}
+
+              {errors.repoName ? (
+                <p className="text-xs text-destructive" role="alert">
+                  {errors.repoName}
+                </p>
+              ) : null}
             </div>
-            {errors.repoPath && (
-              <p className="text-xs text-destructive" role="alert">{errors.repoPath}</p>
-            )}
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="fabric-url">
-              Fabric workspace URL{' '}
-              <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
-            <Input
-              id="fabric-url"
-              data-testid="input-fabric-url"
-              type="text"
-              value={fabricUrl}
-              onChange={(e) => setFabricUrl(e.target.value)}
-              placeholder="https://app.fabric.microsoft.com/..."
-              disabled={isLocked}
-            />
-          </div>
-
-          {applyError && (
-            <p className="text-xs text-destructive" role="alert">{applyError}</p>
-          )}
-
-          {import.meta.env.DEV && (
-            <div className="mt-4 pt-6 border-t border-dashed">
-              <Button
-                data-testid="btn-load-mock-data"
-                onClick={handleSeedMockData}
-                disabled={seeding || isLocked}
-                variant="ghost"
-                size="sm"
-              >
-                {seeding ? 'Loading…' : 'Load mock data'}
-              </Button>
-              {seedError && (
-                <p className="text-xs text-destructive mt-2" role="alert">{seedError}</p>
-              )}
+        <Card className="gap-0 py-5" data-testid="settings-workspace-working-dir-card">
+          <CardHeader className="pb-3">
+            <CardTitle>Working directory</CardTitle>
+            <CardDescription className="mt-0.5">
+              Where the migration repo is cloned on your machine.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="repo-path">
+                Directory <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="repo-path"
+                  data-testid="input-repo-path"
+                  type="text"
+                  value={repoPath}
+                  onChange={(e) => setRepoPath(e.target.value)}
+                  className="flex-1"
+                  placeholder="/path/to/local-clone"
+                  disabled={isLocked}
+                />
+                <Button
+                  type="button"
+                  data-testid="btn-pick-repo-path"
+                  variant="outline"
+                  onClick={pickDirectory}
+                  disabled={isLocked}
+                >
+                  Browse
+                </Button>
+              </div>
+              {errors.repoPath ? (
+                <p className="text-xs text-destructive" role="alert">
+                  {errors.repoPath}
+                </p>
+              ) : null}
+              <p className="text-sm text-muted-foreground">
+                Default: <code>~/migration-utility</code>. Changeable when no migration is active.
+              </p>
             </div>
-          )}
+          </CardContent>
+        </Card>
+
+        {applyError ? (
+          <p className="text-xs text-destructive" role="alert" data-testid="workspace-apply-error">
+            {applyError}
+          </p>
+        ) : null}
+
+        <div className="flex items-center justify-end" data-testid="settings-workspace-actions">
+          <Button
+            type="button"
+            data-testid="btn-apply"
+            onClick={handleApply}
+            disabled={isLocked || applying}
+            size="sm"
+          >
+            {applying ? 'Applying…' : 'Apply'}
+          </Button>
         </div>
-      </TabLayout>
-    </div>
+      </div>
+    </SettingsPanelShell>
   );
 }

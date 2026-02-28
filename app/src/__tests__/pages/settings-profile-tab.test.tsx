@@ -32,6 +32,9 @@ describe('ProfileTab', () => {
   it('renders the profile tab container', () => {
     renderTab();
     expect(screen.getByTestId('settings-profile-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-panel-profile')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-profile-logging-card')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-profile-directories-card')).toBeInTheDocument();
   });
 
   it('renders log level select with current level selected', () => {

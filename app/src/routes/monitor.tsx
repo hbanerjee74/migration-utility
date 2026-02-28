@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Play, CheckCircle2, Loader2, Clock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
+import { monitorLaunchAgent } from '@/lib/tauri';
 
 // ── Agent phases grid ─────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ function PhaseIcon({ status }: { status: PhaseStatus }) {
 function AgentPhasesGrid() {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
         Agent Phases
       </p>
       <div className="grid grid-cols-5 gap-2 rounded-lg border border-border bg-card p-3">
@@ -50,7 +52,7 @@ function AgentPhasesGrid() {
             <div className="flex items-center gap-1">
               <PhaseIcon status={phase.status} />
               <span
-                className="text-[10px] font-semibold"
+                className="text-xs font-semibold"
                 style={
                   phase.status === 'complete'
                     ? { color: 'var(--color-seafoam)' }
@@ -62,7 +64,7 @@ function AgentPhasesGrid() {
                 {phase.label}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground">{phase.count}</p>
+            <p className="text-xs text-muted-foreground">{phase.count}</p>
           </div>
         ))}
       </div>
@@ -72,7 +74,13 @@ function AgentPhasesGrid() {
 
 // ── Ready state ───────────────────────────────────────────────────────────────
 
-function ReadyState({ onLaunch }: { onLaunch: () => void }) {
+function ReadyState({
+  onLaunch,
+  launching,
+}: {
+  onLaunch: () => void;
+  launching: boolean;
+}) {
   return (
     <div
       className="flex-1 flex flex-col items-center justify-center gap-[14px]"
@@ -98,10 +106,11 @@ function ReadyState({ onLaunch }: { onLaunch: () => void }) {
       <Button
         data-testid="btn-launch-migration"
         onClick={onLaunch}
+        disabled={launching}
         className="mt-2 px-6 py-2.5 text-sm"
       >
         <Play size={14} aria-hidden="true" />
-        Launch Migration
+        {launching ? 'Launching…' : 'Launch Migration'}
       </Button>
 
       <p className="text-xs text-muted-foreground/60">Scope will be locked once launched</p>
@@ -111,13 +120,13 @@ function ReadyState({ onLaunch }: { onLaunch: () => void }) {
 
 // ── Running state ─────────────────────────────────────────────────────────────
 
-function RunningState() {
+function RunningState({ logText }: { logText: string }) {
   return (
     <div className="flex-1 overflow-auto">
     <div className="p-8 flex flex-col gap-6 max-w-4xl" data-testid="monitor-running-state">
       {/* Migration Run summary */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
           Migration Run
         </p>
         <div className="rounded-lg border border-border bg-card p-4">
@@ -143,7 +152,7 @@ function RunningState() {
 
       {/* Log stream */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
           Log
         </p>
         <div
@@ -151,7 +160,7 @@ function RunningState() {
           className="rounded-lg font-mono text-xs leading-relaxed p-3.5 h-36 overflow-y-auto"
           style={{ backgroundColor: '#18181B', color: '#A1A1AA' }}
         >
-          Waiting for log output…
+          {logText || 'Waiting for log output…'}
         </div>
       </div>
     </div>
@@ -163,17 +172,37 @@ function RunningState() {
 
 export default function MonitorSurface() {
   const { migrationStatus, setMigrationStatus } = useWorkflowStore();
+  const [launching, setLaunching] = useState(false);
+  const [logText, setLogText] = useState('');
 
-  function handleLaunch() {
+  async function handleLaunch() {
+    setLaunching(true);
     setMigrationStatus('running');
+    setLogText('Launching sidecar agent…');
     logger.info('monitor: migration launched');
+    try {
+      const result = await monitorLaunchAgent({
+        prompt:
+          'Validate migration runtime wiring and report current readiness in concise bullet points.',
+        systemPrompt: 'You are the migration utility orchestrator.',
+      });
+      setLogText(result);
+      logger.info('monitor: agent response received');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setLogText(`Agent launch failed: ${message}`);
+      setMigrationStatus('idle');
+      logger.error('monitor: migration launch failed', err);
+    } finally {
+      setLaunching(false);
+    }
   }
 
   return (
     <div className="h-full flex flex-col">
       {migrationStatus === 'idle' || migrationStatus === 'complete'
-        ? <ReadyState onLaunch={handleLaunch} />
-        : <RunningState />}
+        ? <ReadyState onLaunch={() => void handleLaunch()} launching={launching} />
+        : <RunningState logText={logText} />}
     </div>
   );
 }

@@ -68,7 +68,7 @@ export default function ScopeStepNav() {
       )}
 
       <div className="flex-1 overflow-y-auto py-3 px-2 flex flex-col gap-0.5">
-        <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+        <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
           Steps
         </p>
         {SCOPE_STEPS.map((step, idx) => {

@@ -6,6 +6,6 @@
     "build": "node ../scripts/build-sidecar.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.0.14"
+    "@anthropic-ai/claude-agent-sdk": "^0.2.62"
   }
 }

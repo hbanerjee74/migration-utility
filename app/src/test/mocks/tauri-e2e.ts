@@ -9,6 +9,7 @@
 const mockResponses: Record<string, unknown> = {
   // Workspace
   workspace_get: null,
+  workspace_apply_and_clone: undefined,
   workspace_create: undefined,
   get_workspaces: [],
   create_workspace: undefined,
@@ -24,9 +25,16 @@ const mockResponses: Record<string, unknown> = {
   // Plan
   get_plan_status: { status: "pending", updatedAt: null },
   finalize_plan: undefined,
+  // Monitor
+  monitor_launch_agent: "mock agent output",
   // GitHub auth
   github_get_user: null,
+  github_list_repos: [],
   github_logout: undefined,
+  // Settings
+  get_settings: { anthropicApiKey: null },
+  save_anthropic_api_key: undefined,
+  test_api_key: true,
   // App info
   set_log_level: undefined,
   get_log_file_path: null,

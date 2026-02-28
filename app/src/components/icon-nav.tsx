@@ -90,27 +90,22 @@ export default function IconNav() {
 
   return (
     <nav
-      className="w-[52px] h-full flex flex-col items-center py-3.5 gap-0.5 shrink-0"
+      className="w-[60px] h-full flex flex-col items-center py-3.5 gap-0.5 shrink-0"
       style={{ backgroundColor: 'var(--icon-nav-bg)' }}
       aria-label="Main navigation"
     >
       {/* Logo mark */}
       <div
         data-testid="nav-brand-mark"
-        className="w-7 h-7 rounded-[6px] flex items-center justify-center mb-4 shrink-0 border border-border bg-card"
+        className="w-9 h-9 rounded-[6px] flex items-center justify-center mb-4 shrink-0 border border-white/20"
+        style={{ backgroundColor: 'var(--icon-nav-active-bg)' }}
         aria-hidden="true"
       >
         <img
-          src={BRAND_ASSETS.icon.dark}
-          alt=""
-          className="size-4 block dark:hidden"
-          data-testid="nav-brand-icon-light"
-        />
-        <img
           src={BRAND_ASSETS.icon.light}
           alt=""
-          className="size-4 hidden dark:block"
-          data-testid="nav-brand-icon-dark"
+          className="size-8"
+          data-testid="nav-brand-icon"
         />
       </div>
 

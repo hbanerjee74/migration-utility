@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::db::DbState;
-use crate::types::{DeviceFlowResponse, GitHubAuthResult, GitHubUser};
+use crate::types::{DeviceFlowResponse, GitHubAuthResult, GitHubRepo, GitHubUser};
 
 const GITHUB_CLIENT_ID: &str = "Ov23lioPbQz4gAFxEfhM";
 
@@ -14,10 +14,7 @@ pub async fn github_start_device_flow() -> Result<DeviceFlowResponse, String> {
     let response = client
         .post("https://github.com/login/device/code")
         .header("Accept", "application/json")
-        .form(&[
-            ("client_id", GITHUB_CLIENT_ID),
-            ("scope", "repo,read:user"),
-        ])
+        .form(&[("client_id", GITHUB_CLIENT_ID), ("scope", "repo,read:user")])
         .send()
         .await
         .map_err(|e| {
@@ -27,14 +24,11 @@ pub async fn github_start_device_flow() -> Result<DeviceFlowResponse, String> {
         })?;
 
     let status = response.status();
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| {
-            let msg = format!("Failed to parse device flow response: {e}");
-            log::error!("[github_start_device_flow] {msg}");
-            msg
-        })?;
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        let msg = format!("Failed to parse device flow response: {e}");
+        log::error!("[github_start_device_flow] {msg}");
+        msg
+    })?;
 
     if !status.is_success() {
         let message = body["error_description"]
@@ -89,10 +83,7 @@ pub async fn github_poll_for_token(
         .form(&[
             ("client_id", GITHUB_CLIENT_ID),
             ("device_code", device_code.as_str()),
-            (
-                "grant_type",
-                "urn:ietf:params:oauth:grant-type:device_code",
-            ),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
         ])
         .send()
         .await
@@ -102,14 +93,11 @@ pub async fn github_poll_for_token(
             msg
         })?;
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| {
-            let msg = format!("Failed to parse token response: {e}");
-            log::error!("[github_poll_for_token] {msg}");
-            msg
-        })?;
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        let msg = format!("Failed to parse token response: {e}");
+        log::error!("[github_poll_for_token] {msg}");
+        msg
+    })?;
 
     if let Some(error) = body["error"].as_str() {
         return match error {
@@ -131,10 +119,12 @@ pub async fn github_poll_for_token(
         .ok_or("Missing access_token in response")?
         .to_string();
 
-    let user = fetch_github_user(&client, &access_token).await.map_err(|e| {
-        log::error!("[github_poll_for_token] failed to fetch user profile: {e}");
-        e
-    })?;
+    let user = fetch_github_user(&client, &access_token)
+        .await
+        .map_err(|e| {
+            log::error!("[github_poll_for_token] failed to fetch user profile: {e}");
+            e
+        })?;
 
     {
         let conn = state.0.lock().unwrap();
@@ -189,6 +179,80 @@ pub fn github_logout(state: State<'_, DbState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn github_list_repos(
+    state: State<'_, DbState>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<GitHubRepo>, String> {
+    log::info!("[github_list_repos] query={}", query);
+    let token = {
+        let conn = state.0.lock().unwrap();
+        let settings = crate::db::read_settings(&conn)?;
+        settings
+            .github_oauth_token
+            .ok_or_else(|| "GitHub is not connected".to_string())?
+    };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.github.com/user/repos")
+        .query(&[
+            ("per_page", "100"),
+            ("sort", "updated"),
+            ("affiliation", "owner,collaborator,organization_member"),
+        ])
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "MigrationUtility")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .send()
+        .await
+        .map_err(|e| {
+            let msg = format!("Failed to list GitHub repos: {e}");
+            log::error!("[github_list_repos] {msg}");
+            msg
+        })?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        let msg = format!("Failed to parse repo list response: {e}");
+        log::error!("[github_list_repos] {msg}");
+        msg
+    })?;
+
+    if !status.is_success() {
+        let message = body["message"].as_str().unwrap_or("Unknown error");
+        let err = format!("GitHub API error listing repos ({}): {}", status, message);
+        log::error!("[github_list_repos] {err}");
+        return Err(err);
+    }
+
+    let query_lc = query.to_lowercase();
+    let max = limit.unwrap_or(10).min(25);
+    let repos = body
+        .as_array()
+        .ok_or_else(|| "Unexpected response format from GitHub".to_string())?
+        .iter()
+        .filter_map(|repo| {
+            let id = repo["id"].as_i64()?;
+            let full_name = repo["full_name"].as_str()?.to_string();
+            let private = repo["private"].as_bool().unwrap_or(false);
+            if !query_lc.is_empty() && !full_name.to_lowercase().contains(&query_lc) {
+                return None;
+            }
+            Some(GitHubRepo {
+                id,
+                full_name,
+                private,
+            })
+        })
+        .take(max)
+        .collect::<Vec<_>>();
+
+    Ok(repos)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::db;
@@ -198,6 +262,7 @@ mod tests {
     fn settings_roundtrip_persists_github_fields() {
         let conn = db::open_in_memory().unwrap();
         let settings = AppSettings {
+            anthropic_api_key: None,
             github_oauth_token: Some("tok_abc".to_string()),
             github_user_login: Some("octocat".to_string()),
             github_user_avatar: Some("https://github.com/octocat.png".to_string()),
@@ -207,8 +272,14 @@ mod tests {
         let read = db::read_settings(&conn).unwrap();
         assert_eq!(read.github_oauth_token.as_deref(), Some("tok_abc"));
         assert_eq!(read.github_user_login.as_deref(), Some("octocat"));
-        assert_eq!(read.github_user_avatar.as_deref(), Some("https://github.com/octocat.png"));
-        assert_eq!(read.github_user_email.as_deref(), Some("octocat@github.com"));
+        assert_eq!(
+            read.github_user_avatar.as_deref(),
+            Some("https://github.com/octocat.png")
+        );
+        assert_eq!(
+            read.github_user_email.as_deref(),
+            Some("octocat@github.com")
+        );
     }
 
     #[test]
@@ -223,6 +294,7 @@ mod tests {
     fn logout_clears_github_fields() {
         let conn = db::open_in_memory().unwrap();
         let settings = AppSettings {
+            anthropic_api_key: None,
             github_oauth_token: Some("tok_abc".to_string()),
             github_user_login: Some("octocat".to_string()),
             github_user_avatar: Some("https://github.com/octocat.png".to_string()),
@@ -264,6 +336,7 @@ mod tests {
     fn get_user_returns_some_when_token_present() {
         let conn = db::open_in_memory().unwrap();
         let settings = AppSettings {
+            anthropic_api_key: None,
             github_oauth_token: Some("tok".to_string()),
             github_user_login: Some("dev".to_string()),
             github_user_avatar: Some("https://avatars.githubusercontent.com/u/1".to_string()),
@@ -302,14 +375,11 @@ async fn fetch_github_user(client: &reqwest::Client, token: &str) -> Result<GitH
         })?;
 
     let status = response.status();
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| {
-            let msg = format!("Failed to parse GitHub user response: {e}");
-            log::error!("[fetch_github_user] {msg}");
-            msg
-        })?;
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        let msg = format!("Failed to parse GitHub user response: {e}");
+        log::error!("[fetch_github_user] {msg}");
+        msg
+    })?;
 
     if !status.is_success() {
         let message = body["message"].as_str().unwrap_or("Unknown error");

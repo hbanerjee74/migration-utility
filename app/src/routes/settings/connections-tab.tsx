@@ -1,62 +1,129 @@
 import { useEffect, useState } from 'react';
-import { Check, Github, LogOut } from 'lucide-react';
+import { CheckCircle2, Github, Loader2, LogOut } from 'lucide-react';
+import { toast } from 'sonner';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { GitHubLoginDialog } from '@/components/github-login-dialog';
+import SettingsPanelShell from '@/components/settings/settings-panel-shell';
+import { getSettings, saveAnthropicApiKey, testApiKey } from '@/lib/tauri';
+import { logger } from '@/lib/logger';
 
 export default function ConnectionsTab() {
   const migrationStatus = useWorkflowStore((s) => s.migrationStatus);
   const isLocked = migrationStatus === 'running';
 
-  const { user, isLoggedIn, loadUser, logout } = useAuthStore();
+  const { user, isLoggedIn, isLoading: isAuthLoading, lastCheckedAt, loadUser, logout } = useAuthStore();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [testingApiKey, setTestingApiKey] = useState(false);
+  const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
 
+  useEffect(() => {
+    getSettings()
+      .then((settings) => {
+        setApiKey(settings.anthropicApiKey ?? '');
+      })
+      .catch((err) => {
+        logger.error('get_settings failed', err);
+      });
+  }, []);
+
+  async function handleSaveApiKey(nextValue: string) {
+    try {
+      await saveAnthropicApiKey(nextValue.trim() ? nextValue.trim() : null);
+      logger.info('settings: anthropic API key saved');
+    } catch (err) {
+      logger.error('save_anthropic_api_key failed', err);
+      toast.error('Failed to save API key');
+    }
+  }
+
+  async function handleTestApiKey() {
+    const key = apiKey.trim();
+    if (!key) {
+      toast.error('Enter an API key first');
+      return;
+    }
+    setTestingApiKey(true);
+    setApiKeyValid(null);
+    try {
+      await testApiKey(key);
+      setApiKeyValid(true);
+      toast.success('API key is valid');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('test_api_key failed', err);
+      setApiKeyValid(false);
+      toast.error(message);
+    } finally {
+      setTestingApiKey(false);
+    }
+  }
+
+  const githubStatus = isAuthLoading ? 'Checking' : isLoggedIn && user ? 'Connected' : 'Not connected';
+
   return (
-    <div className="px-8 py-6 h-full overflow-auto">
-      <div className="max-w-lg flex flex-col gap-4">
+    <SettingsPanelShell
+      panelTestId="settings-panel-connections"
+      groupLabel="One-time setup · Safe to update at any time"
+      labelTestId="settings-connections-group-label"
+    >
 
         {/* GitHub */}
-        <Card>
+        <Card className="gap-0 py-5" data-testid="settings-connections-github-card">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">GitHub</CardTitle>
-              {isLoggedIn && user && (
-                <span
-                  className="inline-flex items-center gap-1 text-xs font-medium"
-                  style={{ color: 'var(--color-seafoam)' }}
-                >
-                  <Check className="size-3" />
-                  Connected
-                </span>
-              )}
+            <div className="flex items-center gap-2">
+              <CardTitle>GitHub</CardTitle>
+              <Badge className="text-sm" variant={isLoggedIn && !isAuthLoading ? 'secondary' : 'outline'}>
+                {githubStatus}
+              </Badge>
             </div>
-            <CardDescription className="text-xs mt-0.5">
-              ONE-TIME SETUP · SAFE TO UPDATE AT ANY TIME
+            <CardDescription className="mt-0.5">
+              Used to clone and push to your migration repo.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            {isLoggedIn && user ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Github className="size-3.5 shrink-0" />
-                  <span className="font-mono">github.com/{user.login}</span>
+            {isAuthLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Checking GitHub connection...
+              </div>
+            ) : isLoggedIn && user ? (
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <Avatar className="size-8 shrink-0">
+                    <AvatarImage src={user.avatar_url} alt={user.login} />
+                    <AvatarFallback>{user.login.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-tight">@{user.login}</p>
+                    {user.email ? (
+                      <p className="text-sm text-muted-foreground leading-tight mt-0.5">{user.email}</p>
+                    ) : null}
+                    {lastCheckedAt ? (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Last checked {new Date(lastCheckedAt).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <Button
                   variant="outline"
-                  size="sm"
                   data-testid="btn-disconnect-github"
                   disabled={isLocked}
                   onClick={logout}
                 >
                   <LogOut className="size-3.5" />
-                  Disconnect
+                  Sign Out
                 </Button>
               </div>
             ) : (
@@ -64,7 +131,6 @@ export default function ConnectionsTab() {
                 <p className="text-sm text-muted-foreground">Not connected</p>
                 <Button
                   variant="outline"
-                  size="sm"
                   data-testid="btn-connect-github"
                   disabled={isLocked}
                   onClick={() => setLoginDialogOpen(true)}
@@ -78,11 +144,11 @@ export default function ConnectionsTab() {
         </Card>
 
         {/* Anthropic API key */}
-        <Card>
+        <Card className="gap-0 py-5" data-testid="settings-connections-anthropic-card">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Anthropic API key</CardTitle>
-            <CardDescription className="text-xs mt-0.5">
-              ONE-TIME SETUP · SAFE TO UPDATE AT ANY TIME
+            <CardTitle>Anthropic API key</CardTitle>
+            <CardDescription className="mt-0.5">
+              Used by the headless pipeline agents during migration execution.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0 flex gap-2 items-center">
@@ -90,24 +156,37 @@ export default function ConnectionsTab() {
               id="anthropic-key"
               data-testid="input-anthropic-key"
               type="password"
-              defaultValue=""
+              value={apiKey}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setApiKeyValid(null);
+              }}
+              onBlur={() => {
+                void handleSaveApiKey(apiKey);
+              }}
               placeholder="sk-ant-api03-…"
-              className="font-mono text-xs flex-1"
+              className="font-mono text-sm flex-1"
               disabled={isLocked}
             />
             <Button
-              size="sm"
+              type="button"
+              variant={apiKeyValid ? 'default' : 'outline'}
               data-testid="btn-update-anthropic-key"
-              disabled={isLocked}
+              onClick={() => {
+                void handleTestApiKey();
+              }}
+              disabled={isLocked || testingApiKey || !apiKey.trim()}
+              className={apiKeyValid ? 'text-white' : undefined}
+              style={apiKeyValid ? { background: 'var(--color-seafoam)', color: 'white' } : undefined}
             >
-              Update
+              {testingApiKey ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {!testingApiKey && apiKeyValid ? <CheckCircle2 className="size-3.5" /> : null}
+              {apiKeyValid ? 'Valid' : 'Test'}
             </Button>
           </CardContent>
         </Card>
 
-      </div>
-
       <GitHubLoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} />
-    </div>
+    </SettingsPanelShell>
   );
 }

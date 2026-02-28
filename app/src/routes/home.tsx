@@ -55,7 +55,7 @@ function DashboardState() {
 
       {/* Active Migration card */}
       <div>
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
+        <p className="text-sm font-medium text-muted-foreground mb-2">
           Active Migration
         </p>
         <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
@@ -64,7 +64,7 @@ function DashboardState() {
             <p className="text-sm font-semibold">{workspaceId ?? '—'}</p>
             {isRunning && (
               <div
-                className="flex items-center gap-1.5 text-xs font-medium"
+                className="flex items-center gap-1.5 text-sm font-medium"
                 style={{ color: 'var(--color-pacific)' }}
               >
                 <span
@@ -88,12 +88,12 @@ function DashboardState() {
                 }}
               />
             </div>
-            <span className="text-xs text-muted-foreground shrink-0">— / — procedures</span>
+            <span className="text-sm text-muted-foreground shrink-0">— / — procedures</span>
           </div>
 
           {/* Status chips (only when running) */}
           {isRunning && (
-            <div className="flex items-center gap-4 text-xs font-medium">
+            <div className="flex items-center gap-4 text-sm font-medium">
               <span className="flex items-center gap-1.5" style={{ color: 'var(--color-seafoam)' }}>
                 <span
                   className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -124,7 +124,7 @@ function DashboardState() {
 
         {/* Setup summary */}
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
+          <p className="text-sm font-medium text-muted-foreground mb-2">
             Setup
           </p>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
@@ -135,8 +135,8 @@ function DashboardState() {
                   style={{ color: 'var(--color-seafoam)' }}
                   aria-hidden="true"
                 />
-                <span className="text-xs font-medium flex-1">{SCOPE_STEP_LABELS[step]}</span>
-                <span className="text-xs text-muted-foreground">{STEP_COUNTS[step]}</span>
+                <span className="text-sm font-medium flex-1">{SCOPE_STEP_LABELS[step]}</span>
+                <span className="text-sm text-muted-foreground">{STEP_COUNTS[step]}</span>
               </div>
             ))}
           </div>
@@ -144,14 +144,13 @@ function DashboardState() {
 
         {/* Quick Actions */}
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
+          <p className="text-sm font-medium text-muted-foreground mb-2">
             Quick Actions
           </p>
           <div className="rounded-lg border border-border bg-card p-2 flex flex-col gap-1">
             <Button
               variant="outline"
-              size="sm"
-              className="w-full justify-start text-xs gap-2"
+              className="w-full justify-start text-sm gap-2"
               data-testid="btn-open-monitor"
               onClick={() => navigate('/monitor')}
             >
@@ -160,8 +159,7 @@ function DashboardState() {
             </Button>
             <Button
               variant="outline"
-              size="sm"
-              className="w-full justify-start text-xs gap-2"
+              className="w-full justify-start text-sm gap-2"
               data-testid="btn-review-scope"
               onClick={() => navigate('/scope')}
             >
@@ -170,8 +168,7 @@ function DashboardState() {
             </Button>
             <Button
               variant="ghost"
-              size="sm"
-              className="w-full justify-start text-xs gap-2 text-destructive hover:text-destructive mt-1"
+              className="w-full justify-start text-sm gap-2 text-destructive hover:text-destructive mt-1"
               data-testid="btn-cancel-migration"
             >
               <Square size={13} aria-hidden="true" />

@@ -7,6 +7,8 @@ use thiserror::Error;
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default)]
+    pub anthropic_api_key: Option<String>,
+    #[serde(default)]
     pub github_oauth_token: Option<String>,
     #[serde(default)]
     pub github_user_login: Option<String>,
@@ -19,6 +21,7 @@ pub struct AppSettings {
 impl std::fmt::Debug for AppSettings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppSettings")
+            .field("anthropic_api_key", &"[REDACTED]")
             .field("github_oauth_token", &"[REDACTED]")
             .field("github_user_login", &self.github_user_login)
             .field("github_user_avatar", &self.github_user_avatar)
@@ -30,6 +33,7 @@ impl std::fmt::Debug for AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            anthropic_api_key: None,
             github_oauth_token: None,
             github_user_login: None,
             github_user_avatar: None,
@@ -66,6 +70,14 @@ pub struct GitHubUser {
     pub login: String,
     pub avatar_url: String,
     pub email: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubRepo {
+    pub id: i64,
+    pub full_name: String,
+    pub private: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -110,8 +122,11 @@ impl From<std::io::Error> for CommandError {
 pub struct Workspace {
     pub id: String,
     pub display_name: String,
+    pub migration_repo_name: Option<String>,
     pub migration_repo_path: String,
     pub fabric_url: Option<String>,
+    pub fabric_service_principal_id: Option<String>,
+    pub fabric_service_principal_secret: Option<String>,
     pub created_at: String,
 }
 

@@ -194,7 +194,7 @@ export function GitHubLoginDialog({ open, onOpenChange }: GitHubLoginDialogProps
                 <code className="font-mono text-xl font-bold tracking-widest">
                   {state.device.user_code}
                 </code>
-                <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy code">
+                <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy code" aria-label="Copy code">
                   {state.copied ? (
                     <Check className="size-4" style={{ color: 'var(--color-seafoam)' }} />
                   ) : (

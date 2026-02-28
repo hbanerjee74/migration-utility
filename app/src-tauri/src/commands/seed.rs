@@ -111,7 +111,10 @@ pub fn seed_mock_data(state: State<DbState>) -> Result<(), CommandError> {
             params!["mock-wh-1", "dbo", proc_name, tier],
         )
         .map_err(|e| {
-            log::error!("seed_mock_data: failed to insert candidacy for {}: {e}", proc_name);
+            log::error!(
+                "seed_mock_data: failed to insert candidacy for {}: {e}",
+                proc_name
+            );
             CommandError::from(e)
         })?;
     }
@@ -329,7 +332,9 @@ mod tests {
         assert_eq!(count, 5);
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM warehouse_procedures", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM warehouse_procedures", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(count, 5);
     }
@@ -360,7 +365,9 @@ mod tests {
         assert_eq!(count, 1);
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM items WHERE id='mock-wh-1'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM items WHERE id='mock-wh-1'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(count, 1);
     }

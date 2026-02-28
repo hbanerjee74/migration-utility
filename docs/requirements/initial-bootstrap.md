@@ -1,6 +1,6 @@
 # Initial Bootstrap Plan
 
-Scaffold the Tauri desktop app to a working state: running app, Bun sidecar connected,
+Scaffold the Tauri desktop app to a working state: running app, Node sidecar connected,
 SQLite schema in place, mock data seeded, UI routing shell built, and first screen live.
 
 ---
@@ -14,7 +14,7 @@ SQLite schema in place, mock data seeded, UI routing shell built, and first scre
 | Styling | Tailwind CSS 4, shadcn/ui, AD brand CSS variables |
 | State | Zustand |
 | Routing | TanStack Router |
-| Agent sidecar | Bun + `@anthropic-ai/claude-agent-sdk` |
+| Agent sidecar | Node.js + `@anthropic-ai/claude-agent-sdk` |
 | Database | SQLite via `rusqlite` |
 | Git operations | `git2` |
 | HTTP (Fabric API) | `reqwest` |
@@ -52,9 +52,9 @@ SQLite schema in place, mock data seeded, UI routing shell built, and first scre
 
 ---
 
-## Phase 2 — Bun Sidecar
+## Phase 2 — Node Sidecar
 
-**Goal:** Bun sidecar running, connected to Rust via stdin/stdout JSONL, SDK ready to
+**Goal:** Node sidecar running, connected to Rust via stdin/stdout JSONL, SDK ready to
 receive agent requests.
 
 ### Steps
@@ -66,19 +66,17 @@ receive agent requests.
    - `run-agent.ts` — calls `claude-agent-sdk` `query()`, streams responses
    - `build.js` — esbuild bundler (bundles to `dist/agent-runner.js`, copies SDK runtime)
 3. Install sidecar dependencies:
-   - `@anthropic-ai/claude-agent-sdk` (Bun-native)
+   - `@anthropic-ai/claude-agent-sdk` (Node runtime)
    - `esbuild` (build-time only)
 4. Add build scripts to root `package.json`:
-   - `"sidecar:install"`: `cd sidecar && bun install`
-   - `"sidecar:build"`: `cd sidecar && bun install && bun run build`
-   - `"postinstall"`: `cd sidecar && bun install`
+   - `"sidecar:install"`: `cd sidecar && npm install`
+   - `"sidecar:build"`: `cd sidecar && npm install && npm run build`
+   - `"postinstall"`: `cd sidecar && npm install`
 5. Create `app/src-tauri/src/agents/sidecar_pool.rs`:
-   - Uses Bun standalone binary as the sidecar runtime
+   - Uses Node.js as the sidecar runtime
    - `get_or_spawn()`, `do_spawn()`, `stdout_reader`, `stderr_reader`, `heartbeat_task`
    - Keep JSONL protocol identical: `agent_request`, `stream_start`, `sidecar_ready`
-6. Add Bun binaries to `tauri.conf.json` resources:
-   - `bun-aarch64-apple-darwin`, `bun-x86_64-apple-darwin`
-   - `bun-x86_64-unknown-linux-gnu`, `bun-x86_64-pc-windows-msvc.exe`
+6. Node runtime is required on host for sidecar execution
 7. Add `sidecar/dist/` to `tauri.conf.json` resources
 8. Verify: Rust can spawn sidecar, receives `{"type":"sidecar_ready"}`, ping/pong works
 
@@ -255,7 +253,7 @@ proceeds to scope selection.
 ## Definition of Done
 
 - [ ] `npm run dev` boots Tauri app, no errors
-- [ ] Bun sidecar spawns, `sidecar_ready` received, ping/pong passes
+- [ ] Node sidecar spawns, `sidecar_ready` received, ping/pong passes
 - [ ] Fresh app start creates SQLite with correct schema
 - [ ] `seed_mock_data` populates all 5 tables + stored procs + candidacy + table config
 - [ ] All 5 routes render without errors

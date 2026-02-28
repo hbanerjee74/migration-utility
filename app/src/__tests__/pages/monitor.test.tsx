@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, it, expect, beforeEach } from 'vitest';
 import MonitorSurface from '../../routes/monitor';
 import { useWorkflowStore } from '../../stores/workflow-store';
+import { mockInvokeCommands, resetTauriMocks } from '../../test/mocks/tauri';
 
 function renderPage() {
   return render(
@@ -14,6 +15,10 @@ function renderPage() {
 
 describe('MonitorSurface', () => {
   beforeEach(() => {
+    resetTauriMocks();
+    mockInvokeCommands({
+      monitor_launch_agent: 'agent output',
+    });
     useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'idle' }));
   });
 
@@ -30,10 +35,12 @@ describe('MonitorSurface', () => {
     expect(screen.queryByTestId('monitor-running-state')).not.toBeInTheDocument();
   });
 
-  it('Launch Migration button transitions migrationStatus to running', () => {
+  it('Launch Migration button transitions migrationStatus to running', async () => {
     renderPage();
     fireEvent.click(screen.getByTestId('btn-launch-migration'));
-    expect(useWorkflowStore.getState().migrationStatus).toBe('running');
+    await waitFor(() => {
+      expect(useWorkflowStore.getState().migrationStatus).toBe('running');
+    });
   });
 
   it('renders running state when migrationStatus is running', () => {
@@ -47,5 +54,13 @@ describe('MonitorSurface', () => {
     useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
     renderPage();
     expect(screen.getByTestId('monitor-log-stream')).toBeInTheDocument();
+  });
+
+  it('shows agent response in running log stream after launch', async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('btn-launch-migration'));
+    await waitFor(() => {
+      expect(screen.getByTestId('monitor-log-stream')).toHaveTextContent('agent output');
+    });
   });
 });

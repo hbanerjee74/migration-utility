@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { logger, LOG_LEVELS, getStoredLogLevel, storeLogLevel, type LogLevel } from '@/lib/logger';
 import { setLogLevel, getLogFilePath, getDataDirPath } from '@/lib/tauri';
+import SettingsPanelShell from '@/components/settings/settings-panel-shell';
 
 // ── Log level descriptions ──────────────────────────────────────────────────
 
@@ -25,19 +27,63 @@ const THEME_OPTIONS = [
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const currentTheme = theme ?? 'system';
+
+  function focusThemeOption(index: number) {
+    const target = document.querySelector<HTMLButtonElement>(`[data-theme-index="${index}"]`);
+    target?.focus();
+  }
+
+  function handleThemeKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = (index + 1) % THEME_OPTIONS.length;
+      setTheme(THEME_OPTIONS[next].value);
+      focusThemeOption(next);
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = (index - 1 + THEME_OPTIONS.length) % THEME_OPTIONS.length;
+      setTheme(THEME_OPTIONS[prev].value);
+      focusThemeOption(prev);
+      return;
+    }
+    if (e.key === 'Home') {
+      e.preventDefault();
+      setTheme(THEME_OPTIONS[0].value);
+      focusThemeOption(0);
+      return;
+    }
+    if (e.key === 'End') {
+      e.preventDefault();
+      const last = THEME_OPTIONS.length - 1;
+      setTheme(THEME_OPTIONS[last].value);
+      focusThemeOption(last);
+    }
+  }
 
   return (
-    <div className="flex items-center gap-1 rounded-md bg-muted p-1 w-fit">
-      {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
-        const isActive = theme === value;
+    <div
+      className="flex items-center gap-1 rounded-md bg-muted p-1 w-fit"
+      role="radiogroup"
+      aria-label="Theme"
+    >
+      {THEME_OPTIONS.map(({ value, label, icon: Icon }, index) => {
+        const isActive = currentTheme === value;
         return (
           <button
             key={value}
             type="button"
+            role="radio"
+            aria-checked={isActive}
+            tabIndex={isActive ? 0 : -1}
+            data-theme-index={index}
             data-testid={`theme-${value}`}
             onClick={() => setTheme(value)}
+            onKeyDown={(e) => handleThemeKeyDown(e, index)}
             className={cn(
-              'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors duration-150',
+              'flex items-center gap-1.5 rounded px-2.5 py-1 text-sm font-medium transition-colors duration-150',
               'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
               isActive
                 ? 'bg-background text-foreground shadow-sm'
@@ -58,10 +104,10 @@ function ThemeToggle() {
 function PathRow({ label, path, testId }: { label: string; path: string | null; testId?: string }) {
   return (
     <div className="flex items-start gap-4 py-1.5">
-      <span className="text-xs text-muted-foreground shrink-0 w-36 pt-0.5">{label}</span>
+      <span className="text-sm text-muted-foreground shrink-0 w-36 pt-0.5">{label}</span>
       <div className="flex items-center gap-1.5 min-w-0">
         <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-        <code className="text-xs font-mono text-muted-foreground truncate" data-testid={testId}>
+        <code className="text-sm font-mono text-muted-foreground truncate" data-testid={testId}>
           {path ?? 'Loading…'}
         </code>
       </div>
@@ -90,14 +136,14 @@ export default function ProfileTab() {
   }
 
   return (
-    <div className="px-8 py-6 h-full overflow-auto" data-testid="settings-profile-tab">
-      <div className="max-w-lg flex flex-col gap-6">
+    <SettingsPanelShell panelTestId="settings-panel-profile" className="gap-4" outerClassName="h-full overflow-auto" >
+      <div data-testid="settings-profile-tab" className="flex flex-col gap-4">
 
         {/* Appearance */}
-        <Card>
+        <Card className="gap-0 py-5" data-testid="settings-profile-appearance-card">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Appearance</CardTitle>
-            <CardDescription className="text-xs mt-0.5">
+            <CardTitle>Appearance</CardTitle>
+            <CardDescription className="mt-0.5">
               Choose your preferred colour scheme.
             </CardDescription>
           </CardHeader>
@@ -106,47 +152,61 @@ export default function ProfileTab() {
           </CardContent>
         </Card>
 
-        {/* Logging — flat section, no card border */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium text-foreground">Logging</p>
-          <div className="flex items-center gap-3">
-            <select
-              data-testid="select-log-level"
-              value={level}
-              onChange={handleLevelChange}
-              className="h-9 w-fit rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              {LOG_LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {l.charAt(0).toUpperCase() + l.slice(1)}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">{LEVEL_DESCRIPTION[level]}</p>
-          </div>
-        </div>
+        <Card className="gap-0 py-5" data-testid="settings-profile-logging-card">
+          <CardHeader className="pb-3">
+            <CardTitle>Logging</CardTitle>
+            <CardDescription className="mt-0.5">
+              Set verbosity for app and backend logs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-3">
+              <select
+                data-testid="select-log-level"
+                value={level}
+                onChange={handleLevelChange}
+                className="h-9 w-fit rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                {LOG_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {l.charAt(0).toUpperCase() + l.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-sm text-muted-foreground">{LEVEL_DESCRIPTION[level]}</p>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Directories — flat section */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-foreground mb-1">Directories</p>
-          <PathRow
-            label="Working Directory"
-            path="~/.vibedata/migration-utility"
-            testId="path-working-dir"
-          />
-          <PathRow
-            label="Log File"
-            path={logFilePath}
-            testId="path-log-file"
-          />
-          <PathRow
-            label="Data Directory"
-            path={dataDirPath}
-            testId="path-data-dir"
-          />
-        </div>
+        <Card className="gap-0 py-5" data-testid="settings-profile-directories-card">
+          <CardHeader className="pb-3">
+            <CardTitle>Directories</CardTitle>
+            <CardDescription className="mt-0.5">
+              Local paths used by the Migration Utility app.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-col gap-1">
+              <PathRow
+                label="Working Directory"
+                path="~/.vibedata/migration-utility"
+                testId="path-working-dir"
+              />
+              <PathRow
+                label="Log File"
+                path={logFilePath}
+                testId="path-log-file"
+              />
+              <PathRow
+                label="Data Directory"
+                path={dataDirPath}
+                testId="path-data-dir"
+              />
+            </div>
+          </CardContent>
+        </Card>
 
       </div>
-    </div>
+    </SettingsPanelShell>
   );
 }

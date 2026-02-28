@@ -4,7 +4,11 @@ export function makeWorkspace(overrides: Record<string, unknown> = {}) {
   return {
     id: "ws-1",
     displayName: "Test Workspace",
+    migrationRepoName: "acme/repo",
     migrationRepoPath: "/tmp/repo",
+    fabricUrl: null,
+    fabricServicePrincipalId: null,
+    fabricServicePrincipalSecret: null,
     createdAt: "2026-01-01T00:00:00Z",
     ...overrides,
   };

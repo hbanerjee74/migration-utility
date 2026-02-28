@@ -6,3 +6,4 @@ Each topic gets its own subdirectory with a `README.md`.
 
 - [Database Design](database/README.md)
 - [Branding](branding/README.md)
+- [Sidecar](sidecar/README.md)

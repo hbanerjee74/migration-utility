@@ -1,3 +1,4 @@
+mod agent_sources;
 mod commands;
 mod db;
 mod logging;
@@ -24,13 +25,23 @@ pub fn run() {
                 e
             })?;
             app.manage(db::DbState(Mutex::new(conn)));
+            agent_sources::deploy_on_startup(&app.handle()).map_err(|e| {
+                log::error!("agent_sources deploy failed on startup: {e}");
+                e
+            })?;
+            app.manage(commands::agent::SidecarManager::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::agent::monitor_launch_agent,
             commands::app_info::set_log_level,
             commands::app_info::get_log_file_path,
             commands::app_info::get_data_dir_path,
+            commands::settings::get_settings,
+            commands::settings::save_anthropic_api_key,
+            commands::settings::test_api_key,
             commands::workspace::workspace_create,
+            commands::workspace::workspace_apply_and_clone,
             commands::workspace::workspace_get,
             commands::fabric::fabric_upsert_items,
             commands::fabric::fabric_upsert_schemas,
@@ -49,6 +60,7 @@ pub fn run() {
             commands::github_auth::github_poll_for_token,
             commands::github_auth::github_get_user,
             commands::github_auth::github_logout,
+            commands::github_auth::github_list_repos,
             #[cfg(debug_assertions)]
             commands::seed::seed_mock_data,
         ])

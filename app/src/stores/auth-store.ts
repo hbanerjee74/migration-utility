@@ -7,6 +7,7 @@ interface AuthState {
   user: GitHubUser | null;
   isLoggedIn: boolean;
   isLoading: boolean;
+  lastCheckedAt: string | null;
   loadUser: () => Promise<void>;
   setUser: (user: GitHubUser | null) => void;
   logout: () => Promise<void>;
@@ -17,6 +18,7 @@ const initialState = {
   user: null,
   isLoggedIn: false,
   isLoading: false,
+  lastCheckedAt: null,
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -26,18 +28,28 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       const user = await githubGetUser();
-      set({ user, isLoggedIn: user !== null, isLoading: false });
+      set({
+        user,
+        isLoggedIn: user !== null,
+        isLoading: false,
+        lastCheckedAt: new Date().toISOString(),
+      });
     } catch {
-      set({ isLoading: false });
+      set({ isLoading: false, lastCheckedAt: new Date().toISOString() });
     }
   },
 
-  setUser: (user) => set({ user, isLoggedIn: user !== null }),
+  setUser: (user) =>
+    set({
+      user,
+      isLoggedIn: user !== null,
+      lastCheckedAt: new Date().toISOString(),
+    }),
 
   logout: async () => {
     try {
       await githubLogout();
-      set({ user: null, isLoggedIn: false });
+      set({ user: null, isLoggedIn: false, lastCheckedAt: new Date().toISOString() });
       logger.info('github: signed out');
     } catch (error) {
       logger.error('github: logout failed', error);

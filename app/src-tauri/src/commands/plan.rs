@@ -63,8 +63,12 @@ pub fn plan_serialize(workspace_id: String, state: State<DbState>) -> Result<(),
             Ok(PlanRow {
                 table_ref: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
                 proc_ref: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                candidacy_tier: row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "unknown".to_string()),
-                load_strategy: row.get::<_, Option<String>>(3)?.unwrap_or_else(|| "unknown".to_string()),
+                candidacy_tier: row
+                    .get::<_, Option<String>>(2)?
+                    .unwrap_or_else(|| "unknown".to_string()),
+                load_strategy: row
+                    .get::<_, Option<String>>(3)?
+                    .unwrap_or_else(|| "unknown".to_string()),
             })
         })
         .map_err(|e| {
@@ -216,8 +220,10 @@ mod tests {
                 Ok((
                     row.get::<_, Option<String>>(0)?.unwrap_or_default(),
                     row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                    row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "unknown".to_string()),
-                    row.get::<_, Option<String>>(3)?.unwrap_or_else(|| "unknown".to_string()),
+                    row.get::<_, Option<String>>(2)?
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    row.get::<_, Option<String>>(3)?
+                        .unwrap_or_else(|| "unknown".to_string()),
                 ))
             })
             .unwrap()
@@ -237,7 +243,12 @@ mod tests {
         writeln!(content, "| table | procedure | candidacy | load_strategy |").ok();
         writeln!(content, "|---|---|---|---|").ok();
         for (table_ref, proc_ref, candidacy_tier, load_strategy) in &rows {
-            writeln!(content, "| {} | {} | {} | {} |", table_ref, proc_ref, candidacy_tier, load_strategy).ok();
+            writeln!(
+                content,
+                "| {} | {} | {} | {} |",
+                table_ref, proc_ref, candidacy_tier, load_strategy
+            )
+            .ok();
         }
 
         let plan_path = PathBuf::from(&migration_repo_path).join("plan.md");
@@ -246,12 +257,27 @@ mod tests {
         // Assert file exists and has expected content
         assert!(plan_path.exists(), "plan.md should be created");
         let written = fs::read_to_string(&plan_path).unwrap();
-        assert!(written.contains("workspace_id:"), "should have YAML frontmatter");
+        assert!(
+            written.contains("workspace_id:"),
+            "should have YAML frontmatter"
+        );
         assert!(written.contains("# Migration Plan"), "should have heading");
-        assert!(written.contains("## Selected Tables"), "should have tables section");
-        assert!(written.contains("dbo.orders"), "should contain the table ref");
-        assert!(written.contains("dbo.sp_load_orders"), "should contain the proc ref");
+        assert!(
+            written.contains("## Selected Tables"),
+            "should have tables section"
+        );
+        assert!(
+            written.contains("dbo.orders"),
+            "should contain the table ref"
+        );
+        assert!(
+            written.contains("dbo.sp_load_orders"),
+            "should contain the proc ref"
+        );
         assert!(written.contains("migrate"), "should contain the tier");
-        assert!(written.contains("incremental"), "should contain the load strategy");
+        assert!(
+            written.contains("incremental"),
+            "should contain the load strategy"
+        );
     }
 }

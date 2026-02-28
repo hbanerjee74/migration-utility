@@ -20,8 +20,16 @@ pub fn truncate_log_file(app: &tauri::AppHandle) {
     use tauri::Manager;
     if let Ok(log_dir) = app.path().app_log_dir() {
         let log_file = log_dir.join(format!("{}.log", LOG_FILE_NAME));
-        if log_file.exists() {
-            let _ = std::fs::write(&log_file, "");
+        if let Err(e) = std::fs::create_dir_all(&log_dir) {
+            log::warn!(
+                "Failed to create log directory {}: {}",
+                log_dir.display(),
+                e
+            );
+            return;
+        }
+        if let Err(e) = std::fs::write(&log_file, "") {
+            log::warn!("Failed to reset log file {}: {}", log_file.display(), e);
         }
     }
 }

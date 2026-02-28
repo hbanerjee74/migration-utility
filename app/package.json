@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "npm run sidecar:build && node scripts/dev.mjs",
     "dev:vite": "vite",
     "icons:dark": "node scripts/generate-icons.mjs dark",
     "icons:light": "node scripts/generate-icons.mjs light",
@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "test:e2e:workspace": "playwright test --grep @workspace",
     "test:changed": "vitest run --changed",
-    "test:all": "vitest run && playwright test"
+    "test:all": "vitest run && playwright test",
+    "sidecar:build": "node scripts/build-sidecar.mjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.8",

@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { DeviceFlowResponse, GitHubAuthResult, GitHubUser } from './types';
+import type {
+  AppSettings,
+  ApplyWorkspaceArgs,
+  DeviceFlowResponse,
+  GitHubAuthResult,
+  GitHubRepo,
+  GitHubUser,
+  Workspace,
+} from './types';
 
 export const githubStartDeviceFlow = () =>
   invoke<DeviceFlowResponse>('github_start_device_flow');
@@ -13,6 +21,24 @@ export const githubGetUser = () =>
 export const githubLogout = () =>
   invoke<void>('github_logout');
 
+export const githubListRepos = (query: string, limit = 10) =>
+  invoke<GitHubRepo[]>('github_list_repos', { query, limit });
+
+export const workspaceGet = () =>
+  invoke<Workspace | null>('workspace_get');
+
+export const workspaceApplyAndClone = (args: ApplyWorkspaceArgs) =>
+  invoke<Workspace>('workspace_apply_and_clone', { args });
+
+export const getSettings = () =>
+  invoke<AppSettings>('get_settings');
+
+export const saveAnthropicApiKey = (apiKey: string | null) =>
+  invoke<void>('save_anthropic_api_key', { apiKey });
+
+export const testApiKey = (apiKey: string) =>
+  invoke<boolean>('test_api_key', { apiKey });
+
 export const setLogLevel = (level: string) =>
   invoke<void>('set_log_level', { level });
 
@@ -21,3 +47,9 @@ export const getLogFilePath = () =>
 
 export const getDataDirPath = () =>
   invoke<string>('get_data_dir_path');
+
+export const monitorLaunchAgent = (args: { prompt: string; systemPrompt?: string }) =>
+  invoke<string>('monitor_launch_agent', {
+    prompt: args.prompt,
+    systemPrompt: args.systemPrompt ?? null,
+  });

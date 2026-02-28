@@ -2,7 +2,9 @@ use rusqlite::params;
 use tauri::State;
 
 use crate::db::DbState;
-use crate::types::{CommandError, Item, PipelineActivity, WarehouseProcedure, WarehouseSchema, WarehouseTable};
+use crate::types::{
+    CommandError, Item, PipelineActivity, WarehouseProcedure, WarehouseSchema, WarehouseTable,
+};
 
 #[tauri::command]
 pub fn fabric_upsert_items(
@@ -231,7 +233,12 @@ mod tests {
         .unwrap();
     }
 
-    fn insert_item(conn: &rusqlite::Connection, item_id: &str, workspace_id: &str, item_type: &str) {
+    fn insert_item(
+        conn: &rusqlite::Connection,
+        item_id: &str,
+        workspace_id: &str,
+        item_type: &str,
+    ) {
         conn.execute(
             "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![item_id, workspace_id, "Test Item", item_type],
@@ -274,7 +281,11 @@ mod tests {
         }
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM items WHERE id=?1", rusqlite::params!["item-1"], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM items WHERE id=?1",
+                rusqlite::params!["item-1"],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
     }
