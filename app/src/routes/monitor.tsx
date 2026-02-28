@@ -83,38 +83,40 @@ function ReadyState({
   launching: boolean;
 }) {
   return (
-    <div
-      className="flex-1 flex flex-col items-center justify-center gap-[14px]"
-      data-testid="monitor-ready-state"
-    >
+    <div className="flex-1 overflow-auto px-8 py-6">
       <div
-        className="w-[52px] h-[52px] rounded-full flex items-center justify-center border"
-        style={{
-          backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 90%)',
-          borderColor: 'color-mix(in oklch, var(--color-pacific), transparent 80%)',
-        }}
+        className="w-full md:w-[60%] md:min-w-[520px] md:max-w-[960px] md:resize-x overflow-auto flex flex-col items-center justify-center gap-[14px] min-h-full"
+        data-testid="monitor-ready-state"
       >
-        <Play size={22} style={{ color: 'var(--color-pacific)' }} aria-hidden="true" />
+        <div
+          className="w-[52px] h-[52px] rounded-full flex items-center justify-center border"
+          style={{
+            backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 90%)',
+            borderColor: 'color-mix(in oklch, var(--color-pacific), transparent 80%)',
+          }}
+        >
+          <Play size={22} style={{ color: 'var(--color-pacific)' }} aria-hidden="true" />
+        </div>
+
+        <p className="text-base font-semibold">Ready to launch</p>
+        <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+          This will push your configuration to{' '}
+          <code className="font-mono text-foreground">plan.md</code>, commit to the migration repo,
+          and start the headless pipeline.
+        </p>
+
+        <Button
+          data-testid="btn-launch-migration"
+          onClick={onLaunch}
+          disabled={launching}
+          className="mt-2 px-6 py-2.5 text-sm"
+        >
+          <Play size={14} aria-hidden="true" />
+          {launching ? 'Launching…' : 'Launch Migration'}
+        </Button>
+
+        <p className="text-xs text-muted-foreground/60">Scope will be locked once launched</p>
       </div>
-
-      <p className="text-base font-semibold">Ready to launch</p>
-      <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
-        This will push your configuration to{' '}
-        <code className="font-mono text-foreground">plan.md</code>, commit to the migration repo,
-        and start the headless pipeline.
-      </p>
-
-      <Button
-        data-testid="btn-launch-migration"
-        onClick={onLaunch}
-        disabled={launching}
-        className="mt-2 px-6 py-2.5 text-sm"
-      >
-        <Play size={14} aria-hidden="true" />
-        {launching ? 'Launching…' : 'Launch Migration'}
-      </Button>
-
-      <p className="text-xs text-muted-foreground/60">Scope will be locked once launched</p>
     </div>
   );
 }
@@ -124,7 +126,8 @@ function ReadyState({
 function RunningState({ logText }: { logText: string }) {
   return (
     <div className="flex-1 overflow-auto">
-    <div className="p-8 flex flex-col gap-6 max-w-4xl" data-testid="monitor-running-state">
+    <div className="px-8 py-6">
+    <div className="w-full md:w-[60%] md:min-w-[520px] md:max-w-[960px] md:resize-x overflow-auto flex flex-col gap-6" data-testid="monitor-running-state">
       {/* Migration Run summary */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
@@ -164,6 +167,7 @@ function RunningState({ logText }: { logText: string }) {
           {logText || 'Waiting for log output…'}
         </div>
       </div>
+    </div>
     </div>
     </div>
   );

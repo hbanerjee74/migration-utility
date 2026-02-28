@@ -8,29 +8,28 @@ import { Button } from '@/components/ui/button';
 function SetupState() {
   const navigate = useNavigate();
   return (
-    <div
-      className="flex-1 flex flex-col items-center justify-center gap-[14px]"
-      data-testid="home-setup-state"
-    >
-      <div
-        className="w-14 h-14 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 90%)' }}
-      >
-        <Settings size={26} style={{ color: 'var(--color-pacific)' }} aria-hidden="true" />
+    <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="w-full md:w-[60%] md:min-w-[520px] md:max-w-[960px] md:resize-x overflow-auto flex flex-col items-center justify-center gap-[14px] min-h-full" data-testid="home-setup-state">
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 90%)' }}
+        >
+          <Settings size={26} style={{ color: 'var(--color-pacific)' }} aria-hidden="true" />
+        </div>
+        <p className="text-base font-semibold">Setup required</p>
+        <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+          Connect GitHub, add your Anthropic API key, and configure your Fabric workspace before
+          starting a migration.
+        </p>
+        <Button
+          data-testid="btn-go-to-settings"
+          onClick={() => navigate('/settings')}
+          className="mt-2"
+        >
+          <Settings size={13} aria-hidden="true" />
+          Go to Settings
+        </Button>
       </div>
-      <p className="text-base font-semibold">Setup required</p>
-      <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
-        Connect GitHub, add your Anthropic API key, and configure your Fabric workspace before
-        starting a migration.
-      </p>
-      <Button
-        data-testid="btn-go-to-settings"
-        onClick={() => navigate('/settings')}
-        className="mt-2"
-      >
-        <Settings size={13} aria-hidden="true" />
-        Go to Settings
-      </Button>
     </div>
   );
 }
@@ -51,7 +50,8 @@ function DashboardState() {
 
   return (
     <div className="flex-1 overflow-auto">
-    <div className="p-6 flex flex-col gap-5 max-w-2xl" data-testid="home-dashboard-state">
+    <div className="px-8 py-6">
+    <div className="w-full md:w-[60%] md:min-w-[520px] md:max-w-[960px] md:resize-x overflow-auto flex flex-col gap-5" data-testid="home-dashboard-state">
 
       {/* Active Migration card */}
       <div>
@@ -177,6 +177,7 @@ function DashboardState() {
           </div>
         </div>
       </div>
+    </div>
     </div>
     </div>
   );
