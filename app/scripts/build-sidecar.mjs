@@ -6,7 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(__dirname, '..');
 
 function run(cmd, args, cwd) {
-  const executable = process.platform === 'win32' && cmd === 'npx' ? 'npx.cmd' : cmd;
+  const executable = process.platform === 'win32' && cmd === 'npm' ? 'npm.cmd' : cmd;
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(executable, args, {
       cwd,
@@ -21,4 +21,4 @@ function run(cmd, args, cwd) {
   });
 }
 
-await run('npx', ['tsc', '-p', 'sidecar/tsconfig.build.json'], appRoot);
+await run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'sidecar/tsconfig.build.json'], appRoot);
