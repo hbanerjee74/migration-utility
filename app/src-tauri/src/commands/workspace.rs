@@ -527,12 +527,11 @@ pub fn workspace_test_source_connection(args: TestSourceConnectionArgs) -> Resul
         log::error!("workspace_test_source_connection: failed: source server is required");
         return Err(CommandError::Io("Source server is required".to_string()));
     }
-    let source_port = validate_source_port(args.source_port).map_err(|e| {
+    let source_port = validate_source_port(args.source_port).inspect_err(|_e| {
         log::error!(
             "workspace_test_source_connection: failed: invalid source port {}",
             args.source_port
         );
-        e
     })?;
     if args.source_username.trim().is_empty() {
         log::error!("workspace_test_source_connection: failed: source username is required");
@@ -611,12 +610,11 @@ pub fn workspace_discover_source_databases(
         log::error!("workspace_discover_source_databases: failed: source server is required");
         return Err(CommandError::Io("Source server is required".to_string()));
     }
-    let source_port = validate_source_port(args.source_port).map_err(|e| {
+    let source_port = validate_source_port(args.source_port).inspect_err(|_e| {
         log::error!(
             "workspace_discover_source_databases: failed: invalid source port {}",
             args.source_port
         );
-        e
     })?;
     if args.source_username.trim().is_empty() {
         log::error!("workspace_discover_source_databases: failed: source username is required");
