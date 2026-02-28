@@ -10,7 +10,8 @@ export default function UsageTab() {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [runs, setRuns] = useState<UsageRun[]>([]);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
-  const [runDetail, setRunDetail] = useState<UsageRunDetail | null>(null);
+  const [runDetailsById, setRunDetailsById] = useState<Record<string, UsageRunDetail>>({});
+  const [loadingRunDetailId, setLoadingRunDetailId] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -19,6 +20,7 @@ export default function UsageTab() {
       const [s, r] = await Promise.all([usageGetSummary(), usageListRuns(50)]);
       setSummary(s);
       setRuns(r);
+      setRunDetailsById({});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -33,15 +35,19 @@ export default function UsageTab() {
   async function toggleRun(runId: string) {
     if (expandedRunId === runId) {
       setExpandedRunId(null);
-      setRunDetail(null);
       return;
     }
     setExpandedRunId(runId);
+    if (runDetailsById[runId]) return;
+
+    setLoadingRunDetailId(runId);
     try {
       const detail = await usageGetRunDetail(runId);
-      setRunDetail(detail);
+      setRunDetailsById((prev) => ({ ...prev, [runId]: detail }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingRunDetailId((current) => (current === runId ? null : current));
     }
   }
 
@@ -107,21 +113,23 @@ export default function UsageTab() {
                     </div>
                   </button>
 
-                  {expandedRunId === run.runId && runDetail ? (
+                  {expandedRunId === run.runId && runDetailsById[run.runId] ? (
                     <div className="px-3 pb-3">
                       <p className="text-xs text-muted-foreground mb-2">
-                        Tools: {runDetail.run.toolsUsed.join(', ') || 'none'} · Skills:{' '}
-                        {runDetail.run.skillsLoaded.join(', ') || 'none'}
+                        Tools: {runDetailsById[run.runId].run.toolsUsed.join(', ') || 'none'} · Skills:{' '}
+                        {runDetailsById[run.runId].run.skillsLoaded.join(', ') || 'none'}
                       </p>
                       <div className="max-h-52 overflow-auto rounded border border-border bg-muted/30 p-2 space-y-1">
-                        {runDetail.events.map((ev, idx) => (
-                          <div key={`${runDetail.run.runId}-${idx}`} className="text-xs">
+                        {runDetailsById[run.runId].events.map((ev, idx) => (
+                          <div key={`${runDetailsById[run.runId].run.runId}-${idx}`} className="text-xs">
                             <span className="font-semibold">{ev.label}:</span>{' '}
                             <span className="text-muted-foreground">{ev.content}</span>
                           </div>
                         ))}
                       </div>
                     </div>
+                  ) : expandedRunId === run.runId && loadingRunDetailId === run.runId ? (
+                    <p className="px-3 pb-3 text-xs text-muted-foreground">Loading run detail...</p>
                   ) : null}
                 </div>
               ))}

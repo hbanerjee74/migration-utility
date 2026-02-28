@@ -479,15 +479,38 @@ fn clone_repo_if_needed(repo_name: &str, repo_path: &str, token: &str) -> Result
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        log::error!("workspace_apply_and_clone: git clone failed: {}", stderr);
+        let safe_stderr = redact_clone_error(&stderr, token, repo_name);
+        log::error!("workspace_apply_and_clone: git clone failed: {}", safe_stderr);
         return Err(CommandError::Git(if stderr.is_empty() {
             "git clone failed".to_string()
         } else {
-            stderr
+            safe_stderr
         }));
     }
 
     Ok(())
+}
+
+fn redact_clone_error(stderr: &str, token: &str, repo_name: &str) -> String {
+    if stderr.is_empty() {
+        return String::new();
+    }
+
+    let raw_url = format!(
+        "https://x-access-token:{}@github.com/{}.git",
+        token, repo_name
+    );
+    let safe_url = format!("https://x-access-token:***@github.com/{}.git", repo_name);
+    stderr.replace(token, "***").replace(&raw_url, &safe_url)
+}
+
+fn validate_source_port(port: i64) -> Result<u16, CommandError> {
+    if !(1..=65535).contains(&port) {
+        return Err(CommandError::Io(
+            "Source port must be between 1 and 65535".to_string(),
+        ));
+    }
+    Ok(port as u16)
 }
 
 #[tauri::command]
@@ -504,10 +527,13 @@ pub fn workspace_test_source_connection(args: TestSourceConnectionArgs) -> Resul
         log::error!("workspace_test_source_connection: failed: source server is required");
         return Err(CommandError::Io("Source server is required".to_string()));
     }
-    if args.source_port <= 0 {
-        log::error!("workspace_test_source_connection: failed: source port must be positive");
-        return Err(CommandError::Io("Source port must be positive".to_string()));
-    }
+    let source_port = validate_source_port(args.source_port).map_err(|e| {
+        log::error!(
+            "workspace_test_source_connection: failed: invalid source port {}",
+            args.source_port
+        );
+        e
+    })?;
     if args.source_username.trim().is_empty() {
         log::error!("workspace_test_source_connection: failed: source username is required");
         return Err(CommandError::Io("Source username is required".to_string()));
@@ -525,7 +551,7 @@ pub fn workspace_test_source_connection(args: TestSourceConnectionArgs) -> Resul
 
     let mut config = Config::new();
     config.host(args.source_server.trim());
-    config.port(args.source_port as u16);
+    config.port(source_port);
     // Authenticate against master first so we can return a precise DB-access error.
     // Some SQL Server setups fail login when an unavailable DB is requested directly.
     config.database("master");
@@ -585,10 +611,13 @@ pub fn workspace_discover_source_databases(
         log::error!("workspace_discover_source_databases: failed: source server is required");
         return Err(CommandError::Io("Source server is required".to_string()));
     }
-    if args.source_port <= 0 {
-        log::error!("workspace_discover_source_databases: failed: source port must be positive");
-        return Err(CommandError::Io("Source port must be positive".to_string()));
-    }
+    let source_port = validate_source_port(args.source_port).map_err(|e| {
+        log::error!(
+            "workspace_discover_source_databases: failed: invalid source port {}",
+            args.source_port
+        );
+        e
+    })?;
     if args.source_username.trim().is_empty() {
         log::error!("workspace_discover_source_databases: failed: source username is required");
         return Err(CommandError::Io("Source username is required".to_string()));
@@ -606,7 +635,7 @@ pub fn workspace_discover_source_databases(
 
     let mut config = Config::new();
     config.host(args.source_server.trim());
-    config.port(args.source_port as u16);
+    config.port(source_port);
     config.database("master");
     config.authentication(AuthMethod::sql_server(
         args.source_username.trim(),
@@ -852,6 +881,28 @@ mod tests {
     }
 
     #[test]
+    fn redact_clone_error_masks_token_and_url() {
+        let token = "gho_test_secret";
+        let repo = "acme/data-platform";
+        let stderr = format!(
+            "fatal: could not read from remote repository https://x-access-token:{}@github.com/{}.git",
+            token, repo
+        );
+        let redacted = redact_clone_error(&stderr, token, repo);
+        assert!(!redacted.contains(token));
+        assert!(redacted.contains("https://x-access-token:***@github.com/acme/data-platform.git"));
+    }
+
+    #[test]
+    fn validate_source_port_enforces_bounds() {
+        assert_eq!(validate_source_port(1).unwrap(), 1);
+        assert_eq!(validate_source_port(65535).unwrap(), 65535);
+        assert!(validate_source_port(0).is_err());
+        assert!(validate_source_port(65536).is_err());
+        assert!(validate_source_port(-1).is_err());
+    }
+
+    #[test]
     fn test_source_connection_validates_required_fields() {
         let args = TestSourceConnectionArgs {
             source_type: "sql_server".to_string(),
@@ -869,6 +920,18 @@ mod tests {
             source_type: "bad".to_string(),
             source_server: "localhost".to_string(),
             source_port: 1433,
+            source_authentication_mode: "sql_password".to_string(),
+            source_username: "sa".to_string(),
+            source_password: "secret".to_string(),
+            source_encrypt: true,
+            source_trust_server_certificate: false,
+        };
+        assert!(workspace_test_source_connection(args).is_err());
+
+        let args = TestSourceConnectionArgs {
+            source_type: "sql_server".to_string(),
+            source_server: "localhost".to_string(),
+            source_port: 65536,
             source_authentication_mode: "sql_password".to_string(),
             source_username: "sa".to_string(),
             source_password: "secret".to_string(),

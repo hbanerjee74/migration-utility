@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, CheckCircle2, Loader2, Clock } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '@/stores/workflow-store';
@@ -179,7 +179,8 @@ export default function MonitorSurface() {
   const { migrationStatus, setMigrationStatus } = useWorkflowStore();
   const [launching, setLaunching] = useState(false);
   const [logText, setLogText] = useState('');
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
+  const hasStreamedResponseRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -197,10 +198,12 @@ export default function MonitorSurface() {
       if (!mounted) return;
       const payload = event.payload;
       if (!payload) return;
+      const activeRequestId = activeRequestIdRef.current;
       if (activeRequestId && payload.requestId !== activeRequestId) return;
-      if (!activeRequestId) setActiveRequestId(payload.requestId);
+      if (!activeRequestId) activeRequestIdRef.current = payload.requestId;
 
       if (payload.eventType === 'agent_response' && payload.content) {
+        hasStreamedResponseRef.current = true;
         setLogText((prev) => `${prev}${payload.content}`);
         return;
       }
@@ -224,12 +227,13 @@ export default function MonitorSurface() {
       mounted = false;
       void unlistenPromise.then((fn) => fn());
     };
-  }, [activeRequestId]);
+  }, []);
 
   async function handleLaunch() {
     setLaunching(true);
     setMigrationStatus('running');
-    setActiveRequestId(null);
+    activeRequestIdRef.current = null;
+    hasStreamedResponseRef.current = false;
     setLogText('Launching sidecar agent...\n');
     logger.info('monitor: migration launched');
     try {
@@ -238,7 +242,7 @@ export default function MonitorSurface() {
           'Validate migration runtime wiring and report current readiness in concise bullet points.',
         systemPrompt: 'You are the migration utility orchestrator.',
       });
-      if (result.trim()) {
+      if (!hasStreamedResponseRef.current && result.trim()) {
         setLogText((prev) => (prev.trim() ? `${prev}\n\n${result}` : result));
       }
       logger.info('monitor: agent response received');

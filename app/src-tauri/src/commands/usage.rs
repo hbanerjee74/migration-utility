@@ -116,6 +116,9 @@ pub fn usage_get_run_detail(
     run_id: String,
 ) -> Result<UsageRunDetail, String> {
     log::info!("usage_get_run_detail: run_id={}", run_id);
+    if !is_valid_run_id(&run_id) {
+        return Err("usage_get_run_detail: invalid run_id".to_string());
+    }
     let conn = state
         .0
         .lock()
@@ -390,3 +393,31 @@ fn epoch_millis_to_rfc3339(ms: i64) -> String {
 }
 
 const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
+
+fn is_valid_run_id(run_id: &str) -> bool {
+    let Some(uuid_part) = run_id.strip_prefix("agent-") else {
+        return false;
+    };
+    if uuid_part.is_empty() || uuid_part.len() > 64 {
+        return false;
+    }
+    uuid::Uuid::parse_str(uuid_part).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_run_id;
+
+    #[test]
+    fn valid_run_id_is_accepted() {
+        assert!(is_valid_run_id("agent-123e4567-e89b-12d3-a456-426614174000"));
+    }
+
+    #[test]
+    fn invalid_run_id_is_rejected() {
+        assert!(!is_valid_run_id("../etc/passwd"));
+        assert!(!is_valid_run_id("agent-../../etc/passwd"));
+        assert!(!is_valid_run_id("agent-not-a-uuid"));
+        assert!(!is_valid_run_id("123e4567-e89b-12d3-a456-426614174000"));
+    }
+}
