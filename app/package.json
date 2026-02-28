@@ -54,7 +54,7 @@
     "@vitest/ui": "^4.0.18",
     "jsdom": "^28.1.0",
     "tailwindcss": "^4.2.1",
-    "typescript": "~5.8.3",
+    "typescript": "~5.9.3",
     "vite": "^7.0.4",
     "vitest": "^4.0.18"
   }
