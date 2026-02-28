@@ -87,18 +87,6 @@ UAT is Vibedata's standard CI/CD — the utility doesn't own it. When the FDE op
 
 ---
 
-## Timeline
-
-Five weeks, one engineer.
-
-| Phase | Weeks | Deliverable |
-|-------|-------|-------------|
-| 0 — Foundation | 0.5 | Stack validation, orchestrator scaffold, mock scenarios, `plan.md` schema |
-| 1 — MVP pipeline | 3 | Candidacy → translation → test generation → push for SQL-heavy stored procedures |
-| 2 — Real customer + UI | 1.5 | End-to-end on real stored procs, Tauri setup UI, session resumption |
-
----
-
 ## Document Index
 
 | Document | Purpose |
