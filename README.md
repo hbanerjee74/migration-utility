@@ -2,7 +2,7 @@
 
 A desktop app that migrates Microsoft Fabric Warehouse stored procedures to dbt models on Vibedata's agentic data engineering platform.
 
-You connect it to your Fabric workspace, select which tables to migrate, review and confirm the AI's analysis, then launch. The migration runs as a pipeline in your GitHub repo — producing tested, ready-to-use dbt models at the end.
+Connect it to your Fabric workspace, select which tables to migrate, review and confirm the AI's analysis, then launch. The migration runs as a headless pipeline in your GitHub repo — producing tested, ready-to-merge dbt models at the end.
 
 **Scope:** Silver and gold transformations from Fabric Warehouse (T-SQL). Lakehouse / Spark is not supported.
 
@@ -10,12 +10,9 @@ You connect it to your Fabric workspace, select which tables to migrate, review 
 
 ## Prerequisites
 
-Before you start, make sure you have:
-
 - Access to the Fabric workspace you want to migrate (Viewer role or higher)
-- A GitHub repo set up as your migration repo (can be empty)
-- A Vibedata workspace connected to that repo
-- The Migration Utility desktop app installed (see below)
+- A GitHub account — used to clone and push to the migration repo
+- An Anthropic API key — used by the migration agents during execution
 
 ---
 
@@ -36,70 +33,95 @@ Download the latest release from the [Releases page](https://github.com/hbanerje
 
 ## Workflow
 
-The app walks you through five steps. Each step must be completed before the next unlocks.
+### 1 — Connect your accounts
 
-### Step 1 — Workspace setup
+Open **Settings → Connections** and complete the one-time setup:
 
-Enter your Fabric workspace details and point the app at your local migration repo:
+- **GitHub** — authenticate to allow the app to clone and push to your migration repo
+- **Anthropic API key** — the key the pipeline agents will use during execution
 
-- **Workspace name** — a label for this migration (e.g. "ACME Finance Warehouse")
-- **Migration repo path** — the local folder where your migration repo is cloned
-- **Fabric workspace URL** — optional; used to pre-fill the Fabric connection
+These are reusable across migrations. You only do this once.
 
-Click **Continue** to scan your workspace. The app reads your Fabric Warehouse schema and pipeline definitions — this usually takes under a minute.
+Then open **Settings → Workspace** and configure the current migration:
 
-### Step 2 — Table scope
+- **Fabric workspace URL** and service principal credentials — the source workspace containing the stored procedures to migrate
+- **Migration repo** — the GitHub repo where migration state and agent outputs are committed (separate from your production repo)
+- **Working directory** — where the migration repo is cloned locally (default: `~/migration-utility`)
 
-You'll see every table in your Fabric Warehouse. Select the ones you want to migrate to dbt.
-
-For each selected table, choose the table type:
-
-| Type | When to use |
-|---|---|
-| Fact | High-volume transactional tables loaded incrementally |
-| Dimension | Reference tables that change slowly |
-| Full refresh | Tables always rebuilt from scratch |
-
-If you're not sure, leave it as **Unknown** — you can change it before launching.
-
-### Step 3 — Candidacy review
-
-The app analyses each stored procedure that writes to your selected tables and classifies it as:
-
-| Classification | Meaning |
-|---|---|
-| **Migrate** | Straightforward T-SQL — high confidence dbt translation |
-| **Review** | Complex patterns (dynamic SQL, MERGE, temp tables) — needs human sign-off |
-| **Reject** | Cannot be migrated automatically (e.g. relies on Fabric-specific features) |
-
-Review the classifications. You can override any decision — select a different tier and add a short reason. Rejected procedures won't be included in the migration.
-
-### Step 4 — Table config
-
-For each table, confirm the migration settings:
-
-- **PII columns** — columns containing personal data (masked or excluded in Vibedata)
-- **Incremental column** — the timestamp or sequence column used for incremental loads
-- **Snapshot strategy** — how historical snapshots are taken:
-  - `sample_1day` — one snapshot per day (default)
-  - `full` — full table snapshot on each run
-  - `full_flagged` — full snapshot with an active/inactive flag
-
-### Step 5 — Review and launch
-
-A summary of everything you've configured. Review the table count, any outstanding Review-tier procedures, and the migration repo path.
-
-When ready, click **Launch migration**. The app commits a `plan.md` to your migration repo and triggers the GitHub Actions pipeline.
+Once Connections and Workspace are both configured, **Home** shows you're ready to begin.
 
 ---
 
-## After launch
+### 2 — Select your tables
 
-The migration pipeline runs in your GitHub repo. It works through your selected tables in parallel, translating each stored procedure to a dbt model, generating tests, and validating the output.
+Open **Scope**. You'll see every table in your Fabric Warehouse, grouped by schema. Select the tables that belong to this domain migration.
 
-You can follow progress in the GitHub Actions tab of your migration repo. When complete, the pipeline opens a pull request with the generated dbt models for your review.
+The app traces each selected table back to the stored procedure that produces it — you don't need to know which procedures are involved.
 
-Typical run time: 5–20 minutes depending on the number of tables and complexity of your stored procedures.
+---
+
+### 3 — Review candidacy
+
+The app analyses each stored procedure and classifies it as:
+
+| Tier | Meaning |
+|---|---|
+| **Migrate** | Straightforward T-SQL — the utility handles it automatically |
+| **Review** | Complex patterns (dynamic SQL, MERGE, cursors) — migrate manually in parallel |
+| **Reject** | Cannot be migrated automatically — migrate manually in parallel |
+
+Review the classifications and expand any row to see the agent's reasoning. You can override a classification at any time — select a different tier and add a short reason.
+
+Review and Reject procedures are not blockers. You migrate those manually while the automated track runs, and both converge at the same pull request.
+
+---
+
+### 4 — Confirm table config
+
+For each table, confirm the migration settings:
+
+- **Table type** — Fact, Dimension, or Other (drives snapshot strategy)
+- **Snapshot strategy** — 1-day sample (facts) or full copy (dimensions)
+- **Incremental column** — the date or sequence column used for incremental loads (pre-filled by the agent, confirm before launch)
+- **PII columns** — columns containing personal data; masked before fixture generation
+
+Fields pre-filled by the agent are marked with an "AI suggested" indicator. Edit any field to remove the indicator and take ownership of that value.
+
+Each table requires an explicit **Confirm** click. The left panel tracks not started / opened / confirmed.
+
+---
+
+### 5 — Launch
+
+Once all tables are confirmed, open **Monitor**. A summary shows your confirmed procedure and table counts across all three tiers.
+
+Click **Launch migration**. The app writes your configuration to `plan.md`, commits it to the migration repo, and starts the GitHub Actions pipeline. The Scope wizard locks to read-only at this point.
+
+Monitor switches to the running view, which shows:
+
+- **Progress** — procedures complete vs total
+- **Agent phases** — Discovery · Candidacy · Translation · Tests · Validation, updated in real time
+- **Log stream** — live output from the running agents
+
+---
+
+## Handling blocked procedures
+
+If a Migrate-tier procedure depends on a Review or Reject procedure that hasn't been manually migrated yet, it is marked **BLOCKED** in `plan.md`. The app highlights these in Monitor.
+
+To unblock: migrate the upstream procedure manually, mark it `RESOLVED` in `plan.md`, then relaunch. The pipeline resumes from where it stopped — completed procedures are not re-run.
+
+---
+
+## After the pipeline completes
+
+When all Migrate-tier procedures pass their tests and validation, the utility pushes a branch to your production repo. Open a pull request from that branch. Your team's standard CI/CD takes over from there — ephemeral environment, parallel run, domain owner sign-off, then merge.
+
+---
+
+## Session resumption
+
+The app saves state to SQLite continuously. If you close it mid-setup (between conversations with a domain owner) or mid-run (pipeline interrupted), reopening the app restores exactly where you left off — including partial candidacy and table config work.
 
 ---
 
