@@ -7,7 +7,6 @@
   font-display: swap;
   src: url("/fonts/inter-variable.woff2") format("woff2");
 }
-
 @custom-variant dark (&:is(.dark *));
 
 @theme {
