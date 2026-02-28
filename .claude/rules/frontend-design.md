@@ -65,28 +65,10 @@ Every pipeline/agent state maps to a fixed colour + icon combination. Never inve
 | Pending | `text-muted-foreground` | `Circle` or `Clock` | `bg-muted` |
 | Failed | `text-destructive` | `XCircle` | `bg-destructive/15` |
 | Blocked | `text-amber-600 dark:text-amber-400` | `AlertTriangle` | `bg-amber-100 dark:bg-amber-900/30` |
-| N/A (no agent for cell) | — | (empty) | `bg-muted/30` |
 
 Candidacy tier badges follow the same mapping — Migrate = running colours, Review = warning colours, Reject = error colours.
 
 All badges: `rounded-full text-xs font-medium px-2 py-0.5`.
-
-### Stepper states
-
-The left sidebar stepper is driven by `workflowStore`, not TanStack Router. Navigation calls `setStep()`, which validates state before allowing the transition.
-
-| State | Icon | Colour | Clickable |
-|---|---|---|---|
-| Pending | `Circle` | `text-muted-foreground` | Yes (backward only) |
-| Active | `ChevronRight` | `var(--color-pacific)` | Yes |
-| Complete | `CheckCircle2` | `var(--color-seafoam)` | Yes (any direction) |
-| Locked | `Circle` | `text-muted-foreground` + `opacity-50` | No |
-
-Active step also has a 2px left border: `style={{ borderLeft: "2px solid var(--color-pacific)" }}`.
-
-### Monitor progress bar
-
-Use the `Progress` component. Show counts, not percentages: `N complete · M failed · P pending`. "Re-run failed" button is only visible when failed count > 0. Failed rows float to the top of the agent grid — do not replace the grid with a generic error state.
 
 ## Icons
 
@@ -127,44 +109,7 @@ Fields pre-populated by an agent get a **2px pacific left border** to signal AI 
 </div>
 ```
 
-Apply to: `table_type`, `load_strategy`, `snapshot_strategy`, `incremental_column`, `date_column`, `pii_columns` in Table Config — any field the candidacy agent pre-populates. Do NOT apply to required user-input fields that are never agent-populated.
-
-## Layout
-
-- **Sidebar:** Fixed `w-52` (208px). Never change — maintaining 1072px content width on a 1280px viewport.
-- **Master-detail split** (Table Config): `ResizablePanelGroup` with ~40% list / ~60% form. Use fixed CSS grid if resizing is not needed.
-- **Schema group rows** in Scope: rendered as separate `tr` rows (`bg-muted`) injected between data rows during render — not part of TanStack Table's data model.
-- **Sticky toolbars/footers:** `sticky top-0` or `sticky bottom-0`, `z-40`, with a separating border.
-
-## Table Patterns
-
-- **Identifier columns** (table names, stored proc names): `font-mono text-sm`. Always monospace.
-- **Row expansion:** Expand inline as a sub-row spanning all columns (`bg-muted/50 p-3 text-sm font-mono`), triggered by `ChevronDown` or row click. Use `Collapsible` — never a modal or Sheet for inline detail.
-- **Filter toolbar layout:** `[Search Input] [Filter Dropdown …] [Checkbox] [Count label]` above the table. Count format: `47 procedures · 31 migrate · 8 review · 8 reject`.
-- **Data fetching:** Fetch all rows once on mount; filter client-side. Never re-fetch per filter change.
-
-## Sheet vs Dialog
-
-| Trigger | Component | Reason |
-|---|---|---|
-| Edit within a context view (override, detail) | `Sheet` (right slide-out) | Keeps background table visible |
-| Confirm destructive action | `Dialog` | Full focus prevents accidents |
-| Add a new entity | `Dialog` | Signals major state change |
-
-Never use `Dialog` when the FDE needs to see the data they are acting on.
-
-## Log Stream (Monitor)
-
-- Fixed-height `ScrollArea` (`h-64` min), `pre font-mono text-xs`, auto-scroll to bottom on new lines.
-- Lines arrive via Tauri `listen()` events; batch renders every ~100ms to avoid excessive re-renders.
-- Phase groups (Translation, Tests, …) are collapsible (`Collapsible`): expanded while running, collapsed automatically on completion.
-- Each line: `[HH:MM:SS]` prefix (24-hour local time). Sub-lines within a phase: 2-space indent.
-
-## Autosave
-
-- **Scope checkboxes:** Call `selected_tables_save` debounced at 300ms. No Save button.
-- **Table Config fields:** Call `table_config_save` debounced at 500ms. Separate "Confirm table" button writes `confirmed_at` — not debounced.
-- Saves are optimistic — no loading spinner. On failure, log the error and show a brief toast. Never block the form during a save.
+Apply to: `table_type`, `load_strategy`, `snapshot_strategy`, `incremental_column`, `date_column`, `pii_columns` in Table Config — any field the candidacy agent pre-populates.
 
 ## Components (shadcn/ui)
 
