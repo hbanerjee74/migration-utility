@@ -33,6 +33,7 @@ export default function WorkspaceSetup() {
     invoke<Workspace | null>('workspace_get').then((ws) => {
       if (ws) {
         setWorkspaceId(ws.id);
+        markComplete('workspace');
         advanceTo('scope');
         navigate('/scope');
       }
@@ -85,6 +86,7 @@ export default function WorkspaceSetup() {
       const ws = await invoke<Workspace | null>('workspace_get');
       if (ws) {
         setWorkspaceId(ws.id);
+        markComplete('workspace');
         advanceTo('scope');
         navigate('/scope');
       }
