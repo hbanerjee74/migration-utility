@@ -21,6 +21,7 @@ export default defineConfig(() => ({
       ...(isE2E && {
         "@tauri-apps/api/core": path.resolve(__dirname, "./src/test/mocks/tauri-e2e.ts"),
         "@tauri-apps/plugin-dialog": path.resolve(__dirname, "./src/test/mocks/tauri-e2e-dialog.ts"),
+        "@tauri-apps/plugin-log": path.resolve(__dirname, "./src/test/mocks/tauri-e2e-log.ts"),
       }),
     },
   },

@@ -12,3 +12,12 @@ export const githubGetUser = () =>
 
 export const githubLogout = () =>
   invoke<void>('github_logout');
+
+export const setLogLevel = (level: string) =>
+  invoke<void>('set_log_level', { level });
+
+export const getLogFilePath = () =>
+  invoke<string>('get_log_file_path');
+
+export const getDataDirPath = () =>
+  invoke<string>('get_data_dir_path');

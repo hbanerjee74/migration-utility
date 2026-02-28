@@ -1,5 +1,10 @@
 import { vi } from "vitest";
 
+// Mock @tauri-apps/plugin-log (used by main.tsx — components don't call it directly)
+vi.mock("@tauri-apps/plugin-log", () => ({
+  attachConsole: vi.fn(() => Promise.resolve()),
+}));
+
 // Mock @tauri-apps/api/core
 // Default: resolve undefined for unknown commands
 const defaultInvokeImpl = (_cmd: string) => Promise.resolve(undefined);

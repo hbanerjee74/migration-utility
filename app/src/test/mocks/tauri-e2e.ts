@@ -27,6 +27,10 @@ const mockResponses: Record<string, unknown> = {
   // GitHub auth
   github_get_user: null,
   github_logout: undefined,
+  // App info
+  set_log_level: undefined,
+  get_log_file_path: null,
+  get_data_dir_path: null,
 };
 
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
