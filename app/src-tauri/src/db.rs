@@ -6,6 +6,8 @@ use std::{
 use rusqlite::Connection;
 use thiserror::Error;
 
+use crate::types::AppSettings;
+
 #[derive(Debug, Error)]
 pub enum DbError {
     #[error("sqlite error: {0}")]
@@ -19,6 +21,7 @@ pub struct DbState(pub Mutex<Connection>);
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/001_initial_schema.sql")),
     (2, include_str!("../migrations/002_add_fabric_url.sql")),
+    (3, include_str!("../migrations/003_add_settings.sql")),
 ];
 
 pub fn open(path: &Path) -> Result<Connection, DbError> {
@@ -69,6 +72,33 @@ fn run_migrations(conn: &Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Read the persisted app settings from the settings table.
+/// Returns defaults if no row exists yet.
+pub fn read_settings(conn: &Connection) -> Result<AppSettings, String> {
+    let mut stmt = conn
+        .prepare("SELECT value FROM settings WHERE key = ?1")
+        .map_err(|e| e.to_string())?;
+
+    let result: Result<String, _> = stmt.query_row(["app_settings"], |row| row.get(0));
+
+    match result {
+        Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AppSettings::default()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Write app settings to the settings table.
+pub fn write_settings(conn: &Connection, settings: &AppSettings) -> Result<(), String> {
+    let json = serde_json::to_string(settings).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        ["app_settings", &json],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,6 +125,7 @@ mod tests {
             "table_artifacts",
             "candidacy",
             "table_config",
+            "settings",
         ];
         for table in expected {
             let count: i64 = conn
@@ -122,6 +153,6 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 2, "schema_version should have exactly 2 rows");
+        assert_eq!(count, 3, "schema_version should have exactly 3 rows");
     }
 }

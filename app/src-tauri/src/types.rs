@@ -1,6 +1,84 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+// ── App settings (persisted in the settings table) ────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    #[serde(default)]
+    pub github_oauth_token: Option<String>,
+    #[serde(default)]
+    pub github_user_login: Option<String>,
+    #[serde(default)]
+    pub github_user_avatar: Option<String>,
+    #[serde(default)]
+    pub github_user_email: Option<String>,
+}
+
+impl std::fmt::Debug for AppSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppSettings")
+            .field("github_oauth_token", &"[REDACTED]")
+            .field("github_user_login", &self.github_user_login)
+            .field("github_user_avatar", &self.github_user_avatar)
+            .field("github_user_email", &self.github_user_email)
+            .finish()
+    }
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            github_oauth_token: None,
+            github_user_login: None,
+            github_user_avatar: None,
+            github_user_email: None,
+        }
+    }
+}
+
+// ── GitHub OAuth types ────────────────────────────────────────────────────────
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DeviceFlowResponse {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+impl std::fmt::Debug for DeviceFlowResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceFlowResponse")
+            .field("device_code", &"[REDACTED]")
+            .field("user_code", &self.user_code)
+            .field("verification_uri", &self.verification_uri)
+            .field("expires_in", &self.expires_in)
+            .field("interval", &self.interval)
+            .finish()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitHubUser {
+    pub login: String,
+    pub avatar_url: String,
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "status")]
+pub enum GitHubAuthResult {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "slow_down")]
+    SlowDown,
+    #[serde(rename = "success")]
+    Success { user: GitHubUser },
+}
+
 #[derive(Debug, Error, Serialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum CommandError {
