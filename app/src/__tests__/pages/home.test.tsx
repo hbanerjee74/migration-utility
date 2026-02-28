@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router';
+import { MemoryRouter } from 'react-router';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import HomeSurface from '../../routes/home';
 import { useWorkflowStore } from '../../stores/workflow-store';
@@ -10,13 +10,10 @@ vi.mock('react-router', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-function renderPage(initialPath = '/home') {
+function renderPage() {
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route path="/home" element={<HomeSurface />} />
-        <Route path="/settings/workspace" element={<div data-testid="settings-workspace" />} />
-      </Routes>
+    <MemoryRouter initialEntries={['/home']}>
+      <HomeSurface />
     </MemoryRouter>,
   );
 }
@@ -32,28 +29,33 @@ describe('HomeSurface', () => {
     }));
   });
 
-  it('redirects to /settings/workspace when workspaceId is null', () => {
+  it('renders setup state when workspaceId is null', () => {
     renderPage();
-    expect(screen.getByTestId('settings-workspace')).toBeInTheDocument();
-    expect(screen.queryByTestId('home-ready-state')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-active-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('home-setup-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('home-dashboard-state')).not.toBeInTheDocument();
   });
 
-  it('renders ready state when workspaceId is set and migrationStatus is idle', () => {
+  it('renders dashboard when workspaceId is set', () => {
     useWorkflowStore.setState((s) => ({ ...s, workspaceId: 'ws-1' }));
     renderPage();
-    expect(screen.getByTestId('home-ready-state')).toBeInTheDocument();
+    expect(screen.getByTestId('home-dashboard-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('home-setup-state')).not.toBeInTheDocument();
   });
 
-  it('renders active state when migrationStatus is running', () => {
+  it('renders dashboard when migrationStatus is running', () => {
     useWorkflowStore.setState((s) => ({ ...s, workspaceId: 'ws-1', migrationStatus: 'running' }));
     renderPage();
-    expect(screen.getByTestId('home-active-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('home-ready-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('home-dashboard-state')).toBeInTheDocument();
+  });
+
+  it('"Go to Settings" button navigates to /settings', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('btn-go-to-settings'));
+    expect(mockNavigate).toHaveBeenCalledWith('/settings');
   });
 
   it('"Open Monitor" button navigates to /monitor', () => {
-    useWorkflowStore.setState((s) => ({ ...s, workspaceId: 'ws-1', migrationStatus: 'running' }));
+    useWorkflowStore.setState((s) => ({ ...s, workspaceId: 'ws-1' }));
     renderPage();
     fireEvent.click(screen.getByTestId('btn-open-monitor'));
     expect(mockNavigate).toHaveBeenCalledWith('/monitor');
