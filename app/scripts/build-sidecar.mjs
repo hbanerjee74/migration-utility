@@ -6,19 +6,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(__dirname, '..');
 
 function run(cmd, args, cwd) {
+  const executable = process.platform === 'win32' && cmd === 'npx' ? 'npx.cmd' : cmd;
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(cmd, args, {
+    const child = spawn(executable, args, {
       cwd,
       stdio: 'inherit',
       env: process.env,
     });
     child.on('exit', (code) => {
       if (code === 0) resolvePromise();
-      else rejectPromise(new Error(`${cmd} ${args.join(' ')} failed with code ${code ?? -1}`));
+      else rejectPromise(new Error(`${executable} ${args.join(' ')} failed with code ${code ?? -1}`));
     });
     child.on('error', rejectPromise);
   });
 }
 
 await run('npx', ['tsc', '-p', 'sidecar/tsconfig.build.json'], appRoot);
-
