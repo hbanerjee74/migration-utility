@@ -1,6 +1,9 @@
-# AdventureWorks on Docker (macOS)
+# DW Samples on Docker (macOS)
 
-This setup runs Microsoft SQL Server in Docker with persistent storage, then restores AdventureWorks.
+This setup runs Microsoft SQL Server in Docker with persistent storage, then restores:
+
+- `AdventureWorksDW2022`
+- `WideWorldImportersDW`
 
 ## 1) Prerequisites
 
@@ -26,59 +29,29 @@ Set restart policy once so it comes back automatically with Docker Desktop:
 docker update --restart unless-stopped aw-sql
 ```
 
-## 3) Download AdventureWorks backup
+## 3) Restore missing DW samples (recommended)
 
 ```bash
-mkdir -p ~/adventureworks
-cd ~/adventureworks
-curl -L -o AdventureWorks2022.bak \
-  https://github.com/microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2022.bak
+cd /Users/hbanerjee/src/migration-utility
+SA_PASSWORD='YourStrong!Passw0rd' ./scripts/restore-dw-samples.sh
 ```
 
-## 4) Copy backup into container
+Script behavior:
 
-```bash
-docker exec aw-sql mkdir -p /var/opt/mssql/backup
-docker cp AdventureWorks2022.bak aw-sql:/var/opt/mssql/backup/AdventureWorks2022.bak
-```
+- Downloads backups to `/tmp/sql-backups` by default.
+- Restores only missing databases.
+- Cleans local downloaded backups after run by default.
+- Uses SQL Server host/port from:
+  - `SQL_SERVER_HOST` (default `localhost`)
+  - `SQL_SERVER_PORT` (default `1433`)
 
-## 5) Read logical file names from backup
+Optional overrides:
 
-```bash
-docker exec -it aw-sql /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'YourStrong!Passw0rd' -C \
-  -Q "RESTORE FILELISTONLY FROM DISK = N'/var/opt/mssql/backup/AdventureWorks2022.bak';"
-```
+- `CONTAINER_NAME` (default `aw-sql`)
+- `BACKUP_DIR` (default `/tmp/sql-backups`)
+- `KEEP_BACKUPS=1` to keep local `.bak` files
 
-If `sqlcmd` is not found at that path, try:
-
-```bash
-/opt/mssql-tools/bin/sqlcmd
-```
-
-## 6) Restore AdventureWorks
-
-Replace `<DATA_LOGICAL_NAME>` and `<LOG_LOGICAL_NAME>` using the `FILELISTONLY` output.
-
-```bash
-docker exec -it aw-sql /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'YourStrong!Passw0rd' -C \
-  -Q "RESTORE DATABASE AdventureWorks2022
-      FROM DISK = N'/var/opt/mssql/backup/AdventureWorks2022.bak'
-      WITH MOVE N'<DATA_LOGICAL_NAME>' TO N'/var/opt/mssql/data/AdventureWorks2022.mdf',
-           MOVE N'<LOG_LOGICAL_NAME>'  TO N'/var/opt/mssql/data/AdventureWorks2022_log.ldf',
-           REPLACE, STATS=10;"
-```
-
-## 7) Verify restore
-
-```bash
-docker exec -it aw-sql /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'YourStrong!Passw0rd' -C \
-  -Q "SELECT name FROM sys.databases WHERE name = 'AdventureWorks2022';"
-```
-
-## 8) Daily workflow
+## 4) Daily workflow
 
 - Start container: `docker start aw-sql`
 - Stop container: `docker stop aw-sql`
