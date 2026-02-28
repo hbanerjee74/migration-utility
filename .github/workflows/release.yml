@@ -7,6 +7,11 @@ on:
         description: 'Release version (e.g. 1.0.0)'
         required: true
         type: string
+      dry_run:
+        description: 'Build and package only (skip GitHub release publish)'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build:
@@ -147,6 +152,18 @@ jobs:
           chmod +x "$STAGE/run.sh"
           zip -r "${STAGE}.zip" "$STAGE"
 
+      - name: Validate macOS release archive
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ZIP="MigrationUtility-v${VERSION}-macos.zip"
+          test -f "$ZIP"
+          unzip -l "$ZIP" | grep -F "Migration Utility.app" >/dev/null
+          unzip -l "$ZIP" | grep -F "run.sh" >/dev/null
+
       - name: Package Windows release
         if: matrix.os == 'windows-latest'
         shell: bash
@@ -174,6 +191,19 @@ jobs:
 
           7z a "${STAGE}.zip" "$STAGE"
 
+      - name: Validate Windows release archive
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ZIP="MigrationUtility-v${VERSION}-windows.zip"
+          test -f "$ZIP"
+          7z l "$ZIP" | grep -F "migration-utility.exe" >/dev/null
+          7z l "$ZIP" | grep -F "sidecar/dist/agent-runner.js" >/dev/null
+          7z l "$ZIP" | grep -F "resources/node/win-x64/bin/node.exe" >/dev/null
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -181,6 +211,7 @@ jobs:
           path: MigrationUtility-v*.zip
 
   release:
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     needs: [build]
     permissions:
