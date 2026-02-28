@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { House, LayoutGrid, Activity, Settings, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkflowStore, type Surface } from '@/stores/workflow-store';
+import { BRAND_ASSETS } from '@/lib/branding';
 
 interface NavItem {
   surface: Surface;
@@ -38,7 +39,7 @@ function NavButton({ item, isActive, onClick }: {
       aria-current={isActive ? 'page' : undefined}
       onClick={onClick}
       className={cn(
-        'relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150',
+        'group relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-150',
         'outline-none focus-visible:ring-2 focus-visible:ring-white/40',
         isActive ? 'text-white' : 'text-white/40 hover:text-white/70',
       )}
@@ -58,6 +59,13 @@ function NavButton({ item, isActive, onClick }: {
           aria-hidden="true"
         />
       )}
+      <span
+        data-testid={`${item.testId}-tooltip`}
+        className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 rounded-md bg-card border border-border px-2 py-1 text-xs font-medium text-foreground whitespace-nowrap opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        aria-hidden="true"
+      >
+        {item.label}
+      </span>
       <Icon size={18} aria-hidden="true" />
     </button>
   );
@@ -88,14 +96,22 @@ export default function IconNav() {
     >
       {/* Logo mark */}
       <div
-        className="w-7 h-7 rounded-[6px] flex items-center justify-center mb-4 shrink-0"
-        style={{ backgroundColor: 'var(--color-pacific)' }}
+        data-testid="nav-brand-mark"
+        className="w-7 h-7 rounded-[6px] flex items-center justify-center mb-4 shrink-0 border border-border bg-card"
         aria-hidden="true"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-          <polyline points="13 2 13 9 20 9" />
-        </svg>
+        <img
+          src={BRAND_ASSETS.icon.dark}
+          alt=""
+          className="size-4 block dark:hidden"
+          data-testid="nav-brand-icon-light"
+        />
+        <img
+          src={BRAND_ASSETS.icon.light}
+          alt=""
+          className="size-4 hidden dark:block"
+          data-testid="nav-brand-icon-dark"
+        />
       </div>
 
       {/* Top nav items */}

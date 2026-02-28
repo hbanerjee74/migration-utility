@@ -34,6 +34,13 @@ describe('IconNav', () => {
     expect(screen.getByTestId('nav-scope')).toBeInTheDocument();
     expect(screen.getByTestId('nav-monitor')).toBeInTheDocument();
     expect(screen.getByTestId('nav-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-brand-mark')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-brand-icon-light')).toHaveAttribute('src', '/branding/icon-dark-256.png');
+    expect(screen.getByTestId('nav-brand-icon-dark')).toHaveAttribute('src', '/branding/icon-light-256.png');
+    expect(screen.getByTestId('nav-home-tooltip')).toHaveTextContent('Home');
+    expect(screen.getByTestId('nav-scope-tooltip')).toHaveTextContent('Scope');
+    expect(screen.getByTestId('nav-monitor-tooltip')).toHaveTextContent('Monitor');
+    expect(screen.getByTestId('nav-settings-tooltip')).toHaveTextContent('Settings');
   });
 
   it('marks /home as active when pathname is /home', () => {
@@ -75,5 +82,18 @@ describe('IconNav', () => {
     );
     fireEvent.click(screen.getByTestId('nav-monitor'));
     expect(useWorkflowStore.getState().currentSurface).toBe('monitor');
+  });
+
+  it('exposes accessible nav and icon button names', () => {
+    render(
+      <MemoryRouter initialEntries={['/home']}>
+        <IconNav />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scope' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Monitor' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 });

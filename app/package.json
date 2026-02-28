@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:vite": "vite",
+    "icons:dark": "node scripts/generate-icons.mjs dark",
+    "icons:light": "node scripts/generate-icons.mjs light",
+    "icons:opt1": "BRAND_ICON_SOURCE=src-tauri/icons/icon_opt1.png node scripts/generate-icons.mjs opt1",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
