@@ -51,8 +51,8 @@ jobs:
         run: npm ci
 
       - name: Build sidecar
-        working-directory: app/sidecar
-        run: node build.js
+        working-directory: app
+        run: npm run sidecar:build
 
       - name: Stamp version into config files
         working-directory: app
