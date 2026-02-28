@@ -205,7 +205,7 @@ jobs:
           7z l "$ZIP" | grep -F "resources/node/win-x64/bin/node.exe" >/dev/null
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}
           path: MigrationUtility-v*.zip
