@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Routes, Route } from 'react-router';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import HomeSurface from '../../routes/home';
 import { useWorkflowStore } from '../../stores/workflow-store';
@@ -10,10 +10,13 @@ vi.mock('react-router', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-function renderPage() {
+function renderPage(initialPath = '/home') {
   return render(
-    <MemoryRouter initialEntries={['/home']}>
-      <HomeSurface />
+    <MemoryRouter initialEntries={[initialPath]}>
+      <Routes>
+        <Route path="/home" element={<HomeSurface />} />
+        <Route path="/settings/workspace" element={<div data-testid="settings-workspace" />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -29,9 +32,9 @@ describe('HomeSurface', () => {
     }));
   });
 
-  it('renders setup state when workspaceId is null', () => {
+  it('redirects to /settings/workspace when workspaceId is null', () => {
     renderPage();
-    expect(screen.getByTestId('home-setup-state')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-workspace')).toBeInTheDocument();
     expect(screen.queryByTestId('home-ready-state')).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-active-state')).not.toBeInTheDocument();
   });
@@ -40,7 +43,6 @@ describe('HomeSurface', () => {
     useWorkflowStore.setState((s) => ({ ...s, workspaceId: 'ws-1' }));
     renderPage();
     expect(screen.getByTestId('home-ready-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('home-setup-state')).not.toBeInTheDocument();
   });
 
   it('renders active state when migrationStatus is running', () => {
@@ -48,12 +50,6 @@ describe('HomeSurface', () => {
     renderPage();
     expect(screen.getByTestId('home-active-state')).toBeInTheDocument();
     expect(screen.queryByTestId('home-ready-state')).not.toBeInTheDocument();
-  });
-
-  it('"Go to Settings" button navigates to /settings/workspace', () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId('btn-go-to-settings'));
-    expect(mockNavigate).toHaveBeenCalledWith('/settings/workspace');
   });
 
   it('"Open Monitor" button navigates to /monitor', () => {

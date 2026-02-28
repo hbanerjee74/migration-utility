@@ -1,36 +1,7 @@
-import { useNavigate } from 'react-router';
-import { Settings, ArrowRight } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router';
+import { ArrowRight } from 'lucide-react';
 import { useWorkflowStore, SCOPE_STEPS, SCOPE_STEP_LABELS, SCOPE_STEP_ROUTES } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-
-// ── Setup state ──────────────────────────────────────────────────────────────
-
-function SetupState() {
-  const navigate = useNavigate();
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-4" data-testid="home-setup-state">
-      <div
-        className="w-14 h-14 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: 'color-mix(in oklch, var(--color-pacific), transparent 90%)' }}
-      >
-        <Settings size={26} style={{ color: 'var(--color-pacific)' }} aria-hidden="true" />
-      </div>
-      <p className="text-base font-semibold">Setup required</p>
-      <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
-        Configure your workspace to get started with the migration.
-      </p>
-      <Button
-        data-testid="btn-go-to-settings"
-        onClick={() => navigate('/settings/workspace')}
-        className="mt-2"
-      >
-        <Settings size={13} aria-hidden="true" />
-        Go to Settings
-      </Button>
-    </div>
-  );
-}
 
 // ── Ready state ──────────────────────────────────────────────────────────────
 
@@ -235,16 +206,13 @@ function ActiveState() {
 export default function HomeSurface() {
   const { workspaceId, migrationStatus } = useWorkflowStore();
 
+  if (!workspaceId) return <Navigate to="/settings/workspace" replace />;
+
   const appState =
-    !workspaceId
-      ? 'setup'
-      : migrationStatus === 'running' || migrationStatus === 'complete'
-        ? 'active'
-        : 'ready';
+    migrationStatus === 'running' || migrationStatus === 'complete' ? 'active' : 'ready';
 
   return (
-    <div className={cn('h-full overflow-auto', appState === 'setup' && 'flex')}>
-      {appState === 'setup' && <SetupState />}
+    <div className="h-full overflow-auto">
       {appState === 'ready' && <ReadyState />}
       {appState === 'active' && <ActiveState />}
     </div>
