@@ -74,7 +74,6 @@ Five weeks, one engineer.
 |----------|---------|----------------|
 | [decisions.md](decisions.md) | Binding architectural decisions (DEC-01 through DEC-20) | Why specific choices were made — read before changing any architectural boundary |
 | [build-plan.md](build-plan.md) | Week-by-week plan, mock scenario catalogue, risk register | What to build in what order and what could go wrong |
-| [initial-bootstrap.md](initial-bootstrap.md) | Tauri app scaffold: 7 phases from blank screen to working first screen | Exact steps to get the app running with sidecar, SQLite, mock data, and routing |
-| [vibedata-architecture.md](vibedata-architecture.md) | Vibedata platform architecture: modules, agents, deployment, CI/CD | The broader product this utility feeds into |
-| [vibedata-strategy.md](vibedata-strategy.md) | Problem statement, personas, differentiation, metrics | Why Vibedata exists and where this utility fits |
+| [vibedata-architecture.md](research/vibedata-architecture.md) | Vibedata platform architecture: modules, agents, deployment, CI/CD | The broader product this utility feeds into |
+| [vibedata-strategy.md](research/vibedata-strategy.md) | Problem statement, personas, differentiation, metrics | Why Vibedata exists and where this utility fits |
 | [research/](research/) | dbt unit test strategy, domain memory management, competitor analysis | Supporting evidence for decisions in decisions.md |

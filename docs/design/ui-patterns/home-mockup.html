@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Migration Utility — UI Mockup</title>
+  <style>
+    :root {
+      --pacific:      #2563EB;
+      --pacific-10:   color-mix(in oklch, #2563EB, transparent 90%);
+      --pacific-20:   color-mix(in oklch, #2563EB, transparent 80%);
+      --seafoam:      #10B981;
+      --seafoam-10:   color-mix(in oklch, #10B981, transparent 90%);
+      --destructive:  #EF4444;
+      --amber:        #F59E0B;
+      --amber-10:     color-mix(in oklch, #F59E0B, transparent 88%);
+      --amber-border: #FCD34D;
+      --bg:           #F4F4F5;
+      --bg-card:      #FFFFFF;
+      --bg-muted:     #F4F4F5;
+      --nav-bg:       #18181B;
+      --nav-icon:     #71717A;
+      --nav-active:   #FFFFFF;
+      --border:       #E4E4E7;
+      --fg:           #09090B;
+      --fg-muted:     #71717A;
+      --fg-subtle:    #A1A1AA;
+      --radius:       8px;
+      --radius-sm:    5px;
+      --shadow:       0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+      --font-sans:    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: #DDDDE0;
+      padding: 32px 24px 48px;
+      min-height: 100vh;
+    }
+
+    /* ── Outer chrome ───────────────────────────────── */
+    .scene-label {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 14px;
+    }
+
+    .switcher {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+    .sw-btn {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: 999px;
+      border: 1px solid #CCC;
+      background: #FFF;
+      color: #555;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .sw-btn:hover { border-color: var(--pacific); color: var(--pacific); }
+    .sw-btn.on { background: var(--pacific); border-color: var(--pacific); color: #FFF; }
+
+    /* ── App window ─────────────────────────────────── */
+    .app {
+      display: flex;
+      width: 960px;
+      height: 640px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2), 0 4px 12px rgba(0,0,0,.1);
+    }
+
+    /* ── Icon nav ───────────────────────────────────── */
+    .icon-nav {
+      width: 52px;
+      background: var(--nav-bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 0;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .nav-logo {
+      width: 28px; height: 28px;
+      background: var(--pacific);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+      flex-shrink: 0;
+    }
+    .nav-logo svg { display: block; }
+
+    .nav-item {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      position: relative;
+      color: var(--nav-icon);
+      transition: background .15s, color .15s;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.08); color: #CCC; }
+    .nav-item.active {
+      background: rgba(255,255,255,.12);
+      color: var(--nav-active);
+    }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: -2px;
+      top: 50%; transform: translateY(-50%);
+      width: 3px; height: 18px;
+      background: var(--pacific);
+      border-radius: 0 2px 2px 0;
+    }
+    .nav-spacer { flex: 1; }
+    .nav-item svg { display: block; }
+
+    /* tooltip */
+    .nav-item[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: calc(100% + 10px);
+      top: 50%; transform: translateY(-50%);
+      background: #27272A;
+      color: #FFF;
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+      padding: 4px 9px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    /* ── Main content area ──────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    /* title bar */
+    .titlebar {
+      height: 40px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .tb-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .tb-title {
+      flex: 1; text-align: center;
+      font-size: 12px; font-weight: 500;
+      color: var(--fg-muted);
+    }
+
+    .content { flex: 1; overflow-y: auto; padding: 28px; }
+
+    /* ── Surfaces (shown/hidden) ────────────────────── */
+    .surface { display: none; }
+    .surface.active { display: block; }
+
+    /* ── Typography / spacing ───────────────────────── */
+    .text-xs   { font-size: 11px; }
+    .text-sm   { font-size: 13px; }
+    .text-base { font-size: 15px; }
+    .font-semibold { font-weight: 600; }
+    .font-medium   { font-weight: 500; }
+    .font-mono  { font-family: var(--font-mono); }
+    .text-muted { color: var(--fg-muted); }
+    .text-subtle{ color: var(--fg-subtle); }
+    .section-label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--fg-subtle); margin-bottom: 10px;
+    }
+
+    /* ── Card ───────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .card-p  { padding: 20px; }
+    .card-sm { padding: 14px 16px; }
+
+    /* ── Button ─────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 13px; font-weight: 500;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      border: none; cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--pacific); color: #fff; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+    .btn-ghost   { background: transparent; color: var(--fg-muted); }
+    .btn-sm { font-size: 12px; padding: 5px 11px; }
+
+    /* ── Progress ───────────────────────────────────── */
+    .prog-track { height: 5px; background: var(--bg-muted); border-radius: 999px; overflow: hidden; }
+    .prog-fill  { height: 100%; background: var(--pacific); border-radius: 999px; }
+
+    /* ── Flex helpers ───────────────────────────────── */
+    .row   { display: flex; align-items: center; }
+    .between { justify-content: space-between; }
+    .gap4  { gap: 4px; }
+    .gap6  { gap: 6px; }
+    .gap8  { gap: 8px; }
+    .gap10 { gap: 10px; }
+    .gap12 { gap: 12px; }
+    .gap16 { gap: 16px; }
+    .mt4   { margin-top: 4px; }
+    .mt8   { margin-top: 8px; }
+    .mt12  { margin-top: 12px; }
+    .mt16  { margin-top: 16px; }
+    .mt20  { margin-top: 20px; }
+    .mb8   { margin-bottom: 8px; }
+
+    /* ═══════════════════════════════════════════════
+       SURFACE: HOME
+    ═══════════════════════════════════════════════ */
+
+    /* --- home: no migration --- */
+    .home-empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%;
+      gap: 14px;
+    }
+    .home-empty-icon {
+      width: 56px; height: 56px;
+      background: var(--pacific-10);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 4px;
+    }
+
+    /* --- home: migration active --- */
+    .status-band {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green  { background: var(--seafoam); }
+    .dot-blue   { background: var(--pacific); animation: pulse 1.4s ease-in-out infinite; }
+    .dot-amber  { background: var(--amber); }
+    .dot-muted  { background: var(--fg-subtle); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .chip-green  { background: var(--seafoam-10); color: var(--seafoam); }
+    .chip-blue   { background: var(--pacific-10); color: var(--pacific); }
+    .chip-amber  { background: var(--amber-10);   color: var(--amber); }
+    .chip-muted  { background: var(--bg-muted);   color: var(--fg-muted); }
+
+    /* ═══════════════════════════════════════════════
+       SURFACE: SCOPE
+       Left stepper + right content split
+    ═══════════════════════════════════════════════ */
+    .scope-layout {
+      display: flex; gap: 20px; height: 100%;
+    }
+    .scope-steps {
+      width: 168px; flex-shrink: 0;
+    }
+    .scope-step {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 8px; border-radius: var(--radius-sm);
+      cursor: pointer; position: relative;
+    }
+    .scope-step + .scope-step::before {
+      content: '';
+      position: absolute; top: 0; left: 20px;
+      width: 1px; height: 10px;
+      background: var(--border);
+    }
+    .scope-step.done  { }
+    .scope-step.active { background: var(--pacific-10); }
+    .scope-step.locked { opacity: .45; pointer-events: none; }
+    .step-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .step-icon.done   { background: var(--seafoam);    color: #fff; }
+    .step-icon.active { background: var(--pacific);    color: #fff; }
+    .step-icon.locked { background: var(--bg-muted);   color: var(--fg-subtle); border: 1px solid var(--border); }
+    .step-label { font-size: 13px; font-weight: 500; }
+    .step-meta  { font-size: 11px; color: var(--fg-muted); margin-top: 1px; }
+
+    .scope-panel { flex: 1; }
+
+    /* ═══════════════════════════════════════════════
+       SURFACE: MONITOR
+    ═══════════════════════════════════════════════ */
+    .agent-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    }
+    .agent-tile {
+      background: var(--bg-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+    .agent-title { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .agent-count { font-size: 11px; color: var(--fg-muted); margin-top: 3px; }
+
+    .log-stream {
+      font-family: var(--font-mono);
+      font-size: 11px; line-height: 1.75;
+      color: var(--fg-muted);
+      background: #18181B;
+      color: #A1A1AA;
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      max-height: 110px; overflow-y: auto;
+    }
+    .log-ts   { color: #52525B; }
+    .log-ok   { color: var(--seafoam); }
+    .log-run  { color: #60A5FA; }
+    .log-warn { color: var(--amber); }
+    .log-line { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Surface switcher (simulates clicking icon nav) -->
+  <div class="scene-label">Surface</div>
+  <div class="switcher">
+    <button class="sw-btn on"  onclick="show('home', this); homeState('setup')">Home — Setup</button>
+    <button class="sw-btn"     onclick="show('home', this); homeState('empty')">Home — Ready</button>
+    <button class="sw-btn"     onclick="show('home', this); homeState('active')">Home — Active</button>
+    <button class="sw-btn"     onclick="show('scope', this); scopeLock(false)">Scope</button>
+    <button class="sw-btn"     onclick="show('scope', this); scopeLock(true)">Scope — Locked</button>
+    <button class="sw-btn"     onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
+    <button class="sw-btn"     onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
+    <button class="sw-btn"     onclick="show('settings', this)">Settings</button>
+  </div>
+
+  <div class="app">
+
+    <!-- ── Icon nav ─────────────────────────────── -->
+    <nav class="icon-nav">
+
+      <!-- Logo -->
+      <div class="nav-logo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      </div>
+
+      <!-- Home -->
+      <div class="nav-item active" id="nav-home" data-tip="Home" onclick="show('home', null)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+
+      <!-- Scope -->
+      <div class="nav-item" id="nav-scope" data-tip="Scope" onclick="show('scope', null)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+      </div>
+
+      <!-- Monitor -->
+      <div class="nav-item" id="nav-monitor" data-tip="Monitor" onclick="show('monitor', null)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+
+      <div class="nav-spacer"></div>
+
+      <!-- Settings -->
+      <div class="nav-item" id="nav-settings" data-tip="Settings" onclick="show('settings', null)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </div>
+
+    </nav>
+
+    <!-- ── Main ──────────────────────────────────── -->
+    <div class="main">
+
+      <!-- Title bar -->
+      <div class="titlebar">
+        <div class="tb-dot" style="background:#FF5F57"></div>
+        <div class="tb-dot" style="background:#FFBD2E"></div>
+        <div class="tb-dot" style="background:#28C840"></div>
+      </div>
+
+      <div class="content">
+
+        <!-- ════════════════════════════════════
+             HOME SURFACE
+        ════════════════════════════════════ -->
+        <div id="surface-home" class="surface active">
+
+          <!-- Not yet configured (first launch) -->
+          <div id="home-setup">
+            <div class="home-empty" style="height: 480px;">
+              <div class="home-empty-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--pacific)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <p class="text-base font-semibold">Setup required</p>
+              <p class="text-sm text-muted" style="text-align:center; line-height:1.6; max-width:300px;">
+                Connect GitHub, add your Anthropic API key, and configure your Fabric workspace before starting a migration.
+              </p>
+              <button class="btn btn-primary mt8" onclick="show('settings', null); settingsTab('connections')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                Go to Settings
+              </button>
+            </div>
+          </div>
+
+          <!-- Configured, no active migration — summary -->
+          <div id="home-empty" style="display:none;">
+
+            <div class="section-label">Connections</div>
+            <div class="card card-sm mb16">
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div class="row gap10">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span class="text-sm font-medium" style="width:100px;">GitHub</span>
+                  <span class="text-sm font-mono text-muted">github.com/fde-acme</span>
+                </div>
+                <div class="row gap10">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span class="text-sm font-medium" style="width:100px;">Anthropic</span>
+                  <span class="text-sm text-muted">API key configured</span>
+                </div>
+                <div class="row gap10">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span class="text-sm font-medium" style="width:100px;">Workspace</span>
+                  <span class="text-sm font-mono text-muted">fabric-ws-001</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-label">Migration Setup</div>
+            <div class="card card-sm">
+              <div style="display:flex; flex-direction:column; gap:0;">
+
+                <!-- Step 1: Scope — done -->
+                <div class="row gap12" style="padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <div style="width:20px; height:20px; border-radius:50%; background:var(--seafoam); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span class="text-sm font-medium" style="width:110px;">Scope</span>
+                  <span class="text-sm text-muted">14 tables selected</span>
+                </div>
+
+                <!-- Step 2: Candidacy — done -->
+                <div class="row gap12" style="padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <div style="width:20px; height:20px; border-radius:50%; background:var(--seafoam); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span class="text-sm font-medium" style="width:110px;">Candidacy</span>
+                  <div class="row gap6">
+                    <span class="chip chip-blue" style="font-size:10px;">22 migrate</span>
+                    <span class="chip chip-amber" style="font-size:10px;">5 review</span>
+                    <span class="chip chip-muted" style="font-size:10px;">8 reject</span>
+                  </div>
+                </div>
+
+                <!-- Step 3: Table config — in progress -->
+                <div class="row gap12" style="padding: 10px 0; background: var(--pacific-10); margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-radius: 0 0 var(--radius) var(--radius);">
+                  <div style="width:20px; height:20px; border-radius:50%; background:var(--pacific); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </div>
+                  <span class="text-sm font-medium" style="width:110px; color:var(--pacific);">Table config</span>
+                  <span class="text-sm text-muted">9 / 14 confirmed</span>
+                  <div class="prog-track" style="flex:1; max-width:80px;"><div class="prog-fill" style="width:64%;"></div></div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="mt16" style="display:flex; justify-content:flex-end;">
+              <button class="btn btn-primary" onclick="show('scope', null)">
+                Continue: Table config
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Migration active (toggle with button below) -->
+          <div id="home-active" style="display:none;">
+
+            <div class="section-label">Active Migration</div>
+            <div class="card card-sm">
+              <div class="row between mb8">
+                <div>
+                  <p class="text-base font-semibold">Acme Corp — Finance Domain</p>
+                  <p class="font-mono text-xs text-muted mt4">~/migration-utility</p>
+                </div>
+                <div class="status-band">
+                  <span class="dot dot-blue"></span>
+                  <span class="text-xs" style="color:var(--pacific); font-weight:500;">Pipeline running</span>
+                </div>
+              </div>
+              <div class="row gap10">
+                <div class="prog-track" style="flex:1;"><div class="prog-fill" style="width:61%;"></div></div>
+                <span class="text-xs text-muted">19 / 31 procedures</span>
+              </div>
+              <div class="row gap8 mt12">
+                <span class="chip chip-green"><span class="dot dot-green"></span>19 complete</span>
+                <span class="chip chip-blue"><span class="dot dot-blue"></span>10 running</span>
+                <span class="chip chip-amber"><span class="dot dot-amber"></span>2 blocked</span>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" class="mt16">
+
+              <div>
+                <div class="section-label">Setup</div>
+                <div class="card card-sm">
+                  <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div class="row gap8">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      <span class="text-sm font-medium">Scope</span>
+                      <span class="text-xs text-muted" style="margin-left:auto;">14 tables</span>
+                    </div>
+                    <div class="row gap8">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      <span class="text-sm font-medium">Candidacy</span>
+                      <span class="text-xs text-muted" style="margin-left:auto;">22 migrate</span>
+                    </div>
+                    <div class="row gap8">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      <span class="text-sm font-medium">Table config</span>
+                      <span class="text-xs text-muted" style="margin-left:auto;">14 / 14</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="section-label">Quick Actions</div>
+                <div class="card card-sm" style="display:flex; flex-direction:column; gap:8px;">
+                  <button class="btn btn-outline" style="width:100%; justify-content:flex-start;" onclick="show('monitor', null)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Open Monitor
+                  </button>
+                  <button class="btn btn-outline" style="width:100%; justify-content:flex-start;" onclick="show('scope', null)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+                    Review Scope
+                  </button>
+                  <button class="btn btn-ghost btn-sm" style="width:100%; justify-content:flex-start; margin-top:4px; color:var(--destructive);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
+                    Cancel migration
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+
+        </div>
+
+        <!-- ════════════════════════════════════
+             SCOPE SURFACE
+        ════════════════════════════════════ -->
+        <div id="surface-scope" class="surface">
+
+          <!-- Locked banner (shown after migration launches) -->
+          <div id="scope-locked-banner" style="display:none; margin-bottom:12px; padding:8px 12px; background:color-mix(in oklch, var(--amber), transparent 88%); border:1px solid color-mix(in oklch, var(--amber), transparent 65%); border-radius:var(--radius-sm); display:none;">
+            <div class="row gap8">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span class="text-sm" style="color:var(--amber); font-weight:500;">Migration is running — scope is read-only</span>
+              <span class="text-xs text-muted" style="margin-left:4px;">Go to Monitor to track progress</span>
+            </div>
+          </div>
+
+          <div class="scope-layout" id="scope-content">
+
+            <!-- Step list -->
+            <div class="scope-steps">
+              <div class="section-label" style="padding: 0 8px;">Steps</div>
+
+              <div class="scope-step done">
+                <div class="step-icon done">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div><p class="step-label">Scope</p><p class="step-meta">14 tables</p></div>
+              </div>
+
+              <div class="scope-step done">
+                <div class="step-icon done">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div><p class="step-label">Candidacy</p><p class="step-meta">22 migrate</p></div>
+              </div>
+
+              <div class="scope-step active">
+                <div class="step-icon active">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div><p class="step-label" style="color:var(--pacific);">Table Config</p><p class="step-meta">9 / 14 confirmed</p></div>
+              </div>
+            </div>
+
+            <!-- Step content panel -->
+            <div class="scope-panel">
+              <div class="section-label">Table Config — Confirm per-table settings</div>
+
+              <!-- master-detail: left list -->
+              <div style="display:grid; grid-template-columns: 180px 1fr; gap:12px; height:460px;">
+                <div class="card" style="overflow-y:auto;">
+                  <div style="padding:8px;">
+                    <div style="padding: 6px 10px; border-radius:6px; background:var(--pacific-10); border-left:2px solid var(--pacific); margin-bottom:4px;">
+                      <p class="text-sm font-medium" style="color:var(--pacific);">fact_sales</p>
+                      <p class="text-xs text-muted">dbo</p>
+                    </div>
+                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
+                      <p class="text-sm font-medium">dim_customer</p>
+                      <p class="text-xs" style="color:var(--seafoam);">✓ confirmed</p>
+                    </div>
+                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
+                      <p class="text-sm font-medium">dim_product</p>
+                      <p class="text-xs" style="color:var(--seafoam);">✓ confirmed</p>
+                    </div>
+                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
+                      <p class="text-sm font-medium">silver_revenue</p>
+                      <p class="text-xs text-muted">not started</p>
+                    </div>
+                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
+                      <p class="text-sm font-medium">gold_summary</p>
+                      <p class="text-xs text-muted">not started</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- detail form -->
+                <div class="card card-p" style="overflow-y:auto;">
+                  <div class="row between mb8">
+                    <div>
+                      <p class="text-base font-semibold font-mono">fact_sales</p>
+                      <p class="text-xs text-muted mt4">dbo · usp_load_fact_sales</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm">Confirm →</button>
+                  </div>
+                  <hr style="margin: 12px 0; border-color: var(--border);" />
+                  <div style="display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                      <p class="text-xs text-muted mb8">Table type</p>
+                      <div style="display:flex; gap:6px;">
+                        <div style="padding:5px 12px; border-radius:999px; background:var(--pacific); color:#fff; font-size:12px; font-weight:500; cursor:pointer;">Fact</div>
+                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted); cursor:pointer;">Dimension</div>
+                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted); cursor:pointer;">Other</div>
+                      </div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-muted mb8">Snapshot strategy <span style="font-size:10px; background:var(--pacific-10); color:var(--pacific); padding:1px 6px; border-radius:3px; margin-left:4px;">AI suggested</span></p>
+                      <div style="display:flex; gap:6px;">
+                        <div style="padding:5px 12px; border-radius:999px; background:var(--pacific); color:#fff; font-size:12px; font-weight:500;">1-day sample</div>
+                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted);">Full copy</div>
+                      </div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-muted mb8">Incremental column <span style="font-size:10px; background:var(--pacific-10); color:var(--pacific); padding:1px 6px; border-radius:3px; margin-left:4px;">AI suggested</span></p>
+                      <div style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border:1px solid var(--pacific); border-radius:6px; font-size:12px; font-family:var(--font-mono);">load_date <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-muted mb8">PII columns</p>
+                      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; background:var(--amber-10); border:1px solid var(--amber-border); border-radius:999px; font-size:11px; font-family:var(--font-mono);">customer_email <span style="cursor:pointer; color:var(--fg-muted);">×</span></div>
+                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; background:var(--amber-10); border:1px solid var(--amber-border); border-radius:999px; font-size:11px; font-family:var(--font-mono);">customer_phone <span style="cursor:pointer; color:var(--fg-muted);">×</span></div>
+                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px dashed var(--border); border-radius:999px; font-size:11px; color:var(--fg-muted); cursor:pointer;">+ add column</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /scope-content -->
+        </div><!-- /surface-scope -->
+
+        <!-- ════════════════════════════════════
+             MONITOR SURFACE
+        ════════════════════════════════════ -->
+        <div id="surface-monitor" class="surface">
+
+          <!-- Pre-launch state (all configured, not yet started) -->
+          <div id="monitor-ready">
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:480px; gap:14px;">
+              <div style="width:52px; height:52px; background:var(--pacific-10); border:1px solid var(--pacific-20); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:4px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--pacific)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <p class="text-base font-semibold">Ready to launch</p>
+              <p class="text-sm text-muted" style="text-align:center; line-height:1.6; max-width:300px;">
+                All 14 tables confirmed. This will push config to <span class="font-mono" style="color:var(--fg);">plan.md</span>, commit to the migration repo, and start the headless pipeline.
+              </p>
+              <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
+                <div class="row gap6 text-xs text-muted">
+                  <span class="chip chip-green">22 migrate</span>
+                  <span class="chip chip-amber">5 review</span>
+                  <span class="chip chip-muted">8 reject</span>
+                  <span class="text-xs text-muted" style="margin-left:2px;">· 14 tables configured</span>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="margin-top:8px; padding: 9px 20px; font-size:14px;" onclick="monitorState('running')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Launch migration
+              </button>
+              <p class="text-xs text-subtle">Scope will be locked once launched</p>
+            </div>
+          </div>
+
+          <!-- Running state -->
+          <div id="monitor-running" style="display:none;">
+          <div class="section-label">Migration Run</div>
+          <div class="card card-sm mb8">
+            <div class="row between mb8">
+              <div>
+                <p class="text-base font-semibold">Acme Corp — Finance Domain</p>
+                <p class="text-xs text-muted mt4">Started Feb 28 2026 14:32 · 4m 12s elapsed</p>
+              </div>
+              <div class="row gap8">
+                <span class="chip chip-green"><span class="dot dot-green"></span>19 complete</span>
+                <span class="chip chip-blue"><span class="dot dot-blue"></span>10 running</span>
+                <span class="chip chip-amber"><span class="dot dot-amber"></span>2 blocked</span>
+              </div>
+            </div>
+            <div class="row gap10 mb12">
+              <div class="prog-track" style="flex:1;"><div class="prog-fill" style="width:61%;"></div></div>
+              <span class="text-xs text-muted">19 / 31</span>
+            </div>
+            <div class="row gap8">
+              <button class="btn btn-outline btn-sm">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div class="section-label mt16">Agent Phases</div>
+          <div class="card card-sm mt0">
+            <div class="agent-grid">
+              <div class="agent-tile">
+                <div class="agent-title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span style="color:var(--seafoam);">Discovery</span></div>
+                <p class="agent-count">31 / 31</p>
+              </div>
+              <div class="agent-tile">
+                <div class="agent-title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span style="color:var(--seafoam);">Candidacy</span></div>
+                <p class="agent-count">31 / 31</p>
+              </div>
+              <div class="agent-tile">
+                <div class="agent-title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--pacific)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1.2s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span style="color:var(--pacific);">Translation</span></div>
+                <p class="agent-count">12 / 31 running</p>
+              </div>
+              <div class="agent-tile">
+                <div class="agent-title" style="color:var(--fg-subtle);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Tests</div>
+                <p class="agent-count">7 / 31 pending</p>
+              </div>
+              <div class="agent-tile">
+                <div class="agent-title" style="color:var(--fg-subtle);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Validation</div>
+                <p class="agent-count">0 / 31 pending</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label mt16">Log</div>
+          <div class="card" style="overflow:hidden;">
+            <div class="log-stream">
+              <span class="log-line"><span class="log-ts">[14:36:01]</span> Translation: usp_load_fact_sales — <span class="log-ok">complete</span></span>
+              <span class="log-line"><span class="log-ts">[14:36:04]</span> Tests: usp_load_fact_sales — <span class="log-run">running</span></span>
+              <span class="log-line"><span class="log-ts">[14:36:06]</span> Translation: usp_load_dim_product — <span class="log-run">running</span></span>
+              <span class="log-line"><span class="log-ts">[14:36:09]</span> <span class="log-warn">⚠ Blocked</span>: usp_gold_summary — upstream dep unresolved</span>
+              <span class="log-line"><span class="log-ts">[14:36:11]</span> Translation: usp_load_dim_customer — <span class="log-ok">complete</span></span>
+            </div>
+          </div>
+          </div><!-- /monitor-running -->
+
+        </div><!-- /surface-monitor -->
+
+        <!-- ════════════════════════════════════
+             SETTINGS SURFACE
+        ════════════════════════════════════ -->
+        <div id="surface-settings" class="surface">
+
+          <!-- Settings tab bar -->
+          <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
+            <button class="stab active" id="stab-connections" onclick="settingsTab('connections')">Connections</button>
+            <button class="stab"        id="stab-workspace"   onclick="settingsTab('workspace')">Workspace</button>
+            <button class="stab"        id="stab-reset"       onclick="settingsTab('reset')">Reset</button>
+          </div>
+
+          <!-- ── Connections tab ────────────────────────────
+               One-time. Reusable across all migrations.
+               Safe to update at any time.
+          ─────────────────────────────────────────────── -->
+          <div id="stab-panel-connections" class="stab-panel" style="max-width:520px;">
+
+            <div class="settings-group-label">One-time setup · Safe to update at any time</div>
+
+            <!-- GitHub -->
+            <div class="card card-p mb8">
+              <div class="row between mb8">
+                <div>
+                  <p class="text-sm font-semibold">GitHub</p>
+                  <p class="text-xs text-muted mt4">Used to clone and push to your migration repo.</p>
+                </div>
+                <div class="row gap8">
+                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--seafoam); font-weight:500;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Connected
+                  </span>
+                </div>
+              </div>
+              <div class="row gap8" style="background:var(--bg-muted); border-radius:var(--radius-sm); padding:8px 12px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+                <span class="text-sm font-mono">github.com/fde-acme</span>
+                <button class="btn btn-outline btn-sm" style="margin-left:auto;">Disconnect</button>
+              </div>
+            </div>
+
+            <!-- Anthropic -->
+            <div class="card card-p">
+              <p class="text-sm font-semibold mb8">Anthropic API key</p>
+              <p class="text-xs text-muted" style="margin-bottom:12px;">Used by the headless pipeline agents during migration execution.</p>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="password" value="sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxx" style="flex:1; font-family:var(--font-mono); font-size:12px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg); outline:none;" />
+                <button class="btn btn-outline btn-sm">Update</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ── Workspace tab ───────────────────────────────
+               Set once per migration.
+               Locked while a migration is active — shows lock
+               badge. Changes require resetting the migration.
+          ─────────────────────────────────────────────── -->
+          <div id="stab-panel-workspace" class="stab-panel" style="display:none; max-width:520px;">
+
+            <div class="settings-group-label row gap6">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Locked during active migration · Reset to change
+            </div>
+
+            <!-- Fabric workspace -->
+            <div class="card card-p mb8">
+              <p class="text-sm font-semibold mb8">Fabric workspace</p>
+              <p class="text-xs text-muted" style="margin-bottom:12px;">The source Fabric workspace containing the stored procedures to migrate.</p>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div>
+                  <label class="text-xs text-muted" style="display:block; margin-bottom:4px;">Workspace URL</label>
+                  <input type="text" value="https://app.fabric.microsoft.com/groups/a1b2c3d4-..." disabled style="width:100%; font-family:var(--font-mono); font-size:12px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <div>
+                    <label class="text-xs text-muted" style="display:block; margin-bottom:4px;">Service principal ID</label>
+                    <input type="text" value="sp-vibedata-migration" disabled style="width:100%; font-size:12px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                  </div>
+                  <div>
+                    <label class="text-xs text-muted" style="display:block; margin-bottom:4px;">Secret</label>
+                    <input type="password" value="••••••••••••••••" disabled style="width:100%; font-size:12px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Migration repo -->
+            <div class="card card-p mb8">
+              <p class="text-sm font-semibold mb8">Migration repo</p>
+              <p class="text-xs text-muted" style="margin-bottom:12px;">The GitHub repo where migration state and agent outputs are committed.</p>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bg-muted); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+                  <span class="font-mono text-xs" style="color:var(--fg-muted);">acmecorp/finance-migration</span>
+                </div>
+                <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--fg-subtle); cursor:not-allowed;">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  Locked
+                </div>
+              </div>
+            </div>
+
+            <!-- Local paths -->
+            <div class="card card-p">
+              <p class="text-sm font-semibold mb8">Working directory</p>
+              <p class="text-xs text-muted" style="margin-bottom:12px;">Where the migration repo is cloned on your machine.</p>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div>
+                  <label class="text-xs text-muted" style="display:block; margin-bottom:4px;">Directory <span style="color:var(--fg-subtle);">(locked during migration)</span></label>
+                  <div style="display:flex; gap:8px;">
+                    <input type="text" value="~/migration-utility" disabled style="flex:1; font-family:var(--font-mono); font-size:12px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                    <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--fg-subtle); cursor:not-allowed;">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      Locked
+                    </div>
+                  </div>
+                  <p class="text-xs text-subtle mt4">Default: ~/migration-utility. Changeable when no migration is active.</p>
+                </div>
+                <hr style="border-color:var(--border);" />
+                <div>
+                  <p class="text-xs text-muted mb4">App data directory</p>
+                  <div style="display:flex; align-items:center; gap:8px; background:var(--bg-muted); border-radius:var(--radius-sm); padding:8px 10px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--fg-subtle)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span class="font-mono text-xs" style="color:var(--fg-muted);">~/.vibedata/migration-utility</span>
+                  </div>
+                  <p class="text-xs text-subtle mt4">Hardcoded. Stores .claude context, agent logs, and run history.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ── Reset tab ───────────────────────────────────
+               Abandons the migration repo branch, clears the
+               local working directory, resets all migration
+               state. Keeps Connections.
+          ─────────────────────────────────────────────── -->
+          <div id="stab-panel-reset" class="stab-panel" style="display:none; max-width:520px;">
+
+            <div class="card card-p" style="border-color: color-mix(in oklch, var(--destructive), transparent 70%);">
+              <div class="row gap10 mb8">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <p class="text-base font-semibold" style="color:var(--destructive);">Reset migration</p>
+              </div>
+              <p class="text-sm text-muted" style="line-height:1.7; margin-bottom:16px;">
+                This will permanently clear the current migration and cannot be undone.
+              </p>
+              <div style="background:var(--bg-muted); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:16px;">
+                <p class="text-xs font-semibold mb8">What gets removed:</p>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                  <div class="row gap8 text-xs text-muted">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    Migration repo branch <span class="font-mono" style="color:var(--fg);">acmecorp/finance-migration</span> abandoned
+                  </div>
+                  <div class="row gap8 text-xs text-muted">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    Local working directory <span class="font-mono" style="color:var(--fg);">~/migration-utility</span> deleted
+                  </div>
+                  <div class="row gap8 text-xs text-muted">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    All scope, candidacy, and table config selections cleared
+                  </div>
+                  <div class="row gap8 text-xs text-muted">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    Workspace configuration cleared — you'll set it again on the next migration
+                  </div>
+                </div>
+              </div>
+              <div class="row gap8 mb8" style="background:var(--bg-muted); border-radius:var(--radius-sm); padding:10px 12px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="text-xs text-muted">Kept: GitHub connection · Anthropic API key · Log path</span>
+              </div>
+              <button class="btn btn-sm" style="background:var(--destructive); color:#fff; width:100%; justify-content:center;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                Reset migration and start fresh
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /main -->
+  </div><!-- /app -->
+
+  <style>
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    .mt0 { margin-top: 0; }
+
+    /* ── Settings tabs ───────────────────────────── */
+    .stab {
+      font-family: var(--font-sans);
+      font-size: 13px; font-weight: 500;
+      padding: 8px 16px;
+      border: none; border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      margin-bottom: -1px;
+    }
+    .stab:hover { color: var(--fg); }
+    .stab.active { color: var(--pacific); border-bottom-color: var(--pacific); }
+    .stab-panel { }
+    .settings-group-label {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .05em; text-transform: uppercase;
+      color: var(--fg-subtle);
+      margin-bottom: 12px;
+    }
+  </style>
+
+  <script>
+    function show(name, btn) {
+      document.querySelectorAll('.surface').forEach(s => s.classList.remove('active'));
+      document.getElementById('surface-' + name).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('nav-' + name).classList.add('active');
+      if (btn) {
+        document.querySelectorAll('.sw-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+      }
+    }
+
+    function homeState(state) {
+      document.getElementById('home-setup').style.display  = state === 'setup'  ? 'block' : 'none';
+      document.getElementById('home-empty').style.display  = state === 'empty'  ? 'block' : 'none';
+      document.getElementById('home-active').style.display = state === 'active' ? 'block' : 'none';
+    }
+
+    function scopeLock(locked) {
+      document.getElementById('scope-locked-banner').style.display = locked ? 'block' : 'none';
+      var content = document.getElementById('scope-content');
+      content.style.opacity = locked ? '0.5' : '1';
+      content.style.pointerEvents = locked ? 'none' : '';
+    }
+
+    function monitorState(state) {
+      document.getElementById('monitor-ready').style.display   = state === 'ready'   ? 'block' : 'none';
+      document.getElementById('monitor-running').style.display = state === 'running' ? 'block' : 'none';
+    }
+
+    function settingsTab(tab) {
+      ['connections', 'workspace', 'reset'].forEach(function(t) {
+        document.getElementById('stab-' + t).classList.toggle('active', t === tab);
+        document.getElementById('stab-panel-' + t).style.display = t === tab ? 'block' : 'none';
+      });
+    }
+  </script>
+
+</body>
+</html>

@@ -136,7 +136,7 @@ document.
 - `candidacy_save(warehouse_item_id, schema_name, procedure_name, tier, reasoning) → ()`
 - `candidacy_override(warehouse_item_id, schema_name, procedure_name, tier, reason) → ()`
 - `candidacy_list(workspace_id) → Vec<CandidacyResult>`
-- `table_config_save(selected_table_id, pii_columns, incremental_column, snapshot_strategy) → ()`
+- `table_config_save(selected_table_id, table_type?, load_strategy?, grain_columns?, relationships_json?, incremental_column?, date_column?, snapshot_strategy, pii_columns?) → ()`
 - `table_config_get(selected_table_id) → Option<TableConfig>`
 
 **Plan + Git**
@@ -191,9 +191,13 @@ One `Warehouse` item and two `DataPipeline` items (P-01 linear, P-02 fan-out):
 
 Pre-populated table config for `fact_sales`:
 
-- PII columns: `["customer_email", "customer_phone"]`
+- Table type: `fact`
+- Load strategy: `incremental`
+- Grain columns: `["sale_id"]`
 - Incremental column: `load_date`
+- Date column: `sale_date`
 - Snapshot strategy: `sample_1day`
+- PII columns: `["customer_email", "customer_phone"]`
 
 ### Steps
 
