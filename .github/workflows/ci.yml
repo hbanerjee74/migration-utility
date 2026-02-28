@@ -63,7 +63,9 @@ jobs:
           workspaces: app/src-tauri -> target
 
       - name: Stub sidecar dist for Tauri resource validation
-        run: mkdir -p app/sidecar/dist
+        run: |
+          mkdir -p app/sidecar/dist
+          echo "{}" > app/sidecar/dist/placeholder.json
 
       - name: Cargo test
         working-directory: app/src-tauri
