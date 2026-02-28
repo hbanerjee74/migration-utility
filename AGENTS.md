@@ -6,14 +6,23 @@ Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fab
 
 ## Architecture
 
-| Component | What | Tech |
-|-----------|------|------|
-| Setup UI | Scope selection, candidacy review, table config (snapshot strategy, PII, incremental column). Persists state to SQLite; pushes finalized config to `plan.md` | Tauri + React/TypeScript + SQLite |
-| Orchestrator | Reads `plan.md`, builds dependency graph, spawns sub-agents in parallel, handles BLOCKED/RESOLVED | Python + Claude Agent SDK |
-| Sub-agents | Candidacy, Translation, Test Generator, Validation | Agent SDK `AgentDefinition` with scoped tools |
-| dbt interaction | Lineage, compiled SQL, model execution, validation queries | dbt-core-mcp (MCP server) |
-| Runtime | Headless execution, session resumption | GitHub Actions |
-| State | Progress, dependencies, start/stop resumption | `plan.md` in migration repo (git-backed) |
+| Layer | Technology |
+|---|---|
+| Desktop framework | Tauri v2 |
+| Frontend | React 19, TypeScript strict, Vite |
+| Styling | Tailwind CSS 4, shadcn/ui |
+| State | Zustand |
+| Routing | TanStack Router |
+| Icons | Lucide React |
+| Agent sidecar | Bun + `@anthropic-ai/claude-agent-sdk` |
+| Database | SQLite (`rusqlite` bundled) |
+| Git operations | `git2` |
+| HTTP (Fabric API) | `reqwest` |
+| Rust errors | `thiserror` |
+| Orchestrator | Python + Claude Agent SDK (`uv` for deps) |
+| dbt integration | dbt-core-mcp (MCP server) |
+| Runtime | GitHub Actions (headless execution, session resumption) |
+| Execution state | `plan.md` in migration repo (git-backed) |
 
 **Source scope:** Fabric Warehouse (T-SQL stored procedures via ADF pipelines). Lakehouse/Spark is post-MVP.
 
