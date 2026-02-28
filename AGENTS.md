@@ -154,6 +154,16 @@ Every new feature must include logging. Use `logging` module (Python), `log` cra
 | **info** | Key lifecycle events (command invoked, agent started, plan state changed) |
 | **debug** | Internal details useful only when troubleshooting |
 
+## UI Constraints
+
+These rules are enforced by the design but easy to miss during implementation:
+
+- **Scope locks after launch:** All three Scope steps (Select, Candidacy, Table Config) become read-only once a migration run is launched. Show an amber banner; disable all form fields. The surface remains navigable.
+- **Workspace tab locks after launch:** Fabric URL, migration repo, and working directory fields are `disabled` once a run is active. Connections tab (GitHub, API key) stays editable.
+- **Wizard forward navigation:** Blocked only when required state is missing. Validate inline — never block with a modal. Backward navigation is always free.
+- **Candidacy override reason is required:** The override reason field must be non-empty before the override Sheet can save. Call `candidacy_override` command on explicit save, not debounced.
+- **PII confirmation is explicit:** "Confirm table" in Table Config must be clicked before launch is allowed — auto-populated PII fields do not count as confirmed.
+
 ## Gotchas
 
 - **Agent SDK has no team tools:** The Claude Agent SDK (Python) does NOT support TeamCreate, TaskCreate, or SendMessage. Use the `Task` tool for sub-agents. Multiple `Task` calls in the same turn run in parallel.
