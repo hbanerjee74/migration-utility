@@ -24,6 +24,9 @@ const mockResponses: Record<string, unknown> = {
   // Plan
   get_plan_status: { status: "pending", updatedAt: null },
   finalize_plan: undefined,
+  // GitHub auth
+  github_get_user: null,
+  github_logout: undefined,
 };
 
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
