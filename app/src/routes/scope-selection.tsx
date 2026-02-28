@@ -1,5 +1,5 @@
 import { useWorkflowStore } from '../stores/workflow-store';
-import StepActions from '@/components/step-actions';
+import TabLayout from '@/components/tab-layout';
 
 export default function ScopeSelection() {
   const { applyStep } = useWorkflowStore();
@@ -10,13 +10,12 @@ export default function ScopeSelection() {
   }
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-base font-semibold tracking-tight">Table Scope</h1>
-      <p className="text-sm text-muted-foreground mt-1 mb-6">
-        Select the tables to include in this migration.
-      </p>
+    <TabLayout
+      title="Table Scope"
+      description="Select the tables to include in this migration."
+      onApply={handleApply}
+    >
       <p className="text-sm text-muted-foreground">Coming soon.</p>
-      <StepActions onApply={handleApply} />
-    </div>
+    </TabLayout>
   );
 }

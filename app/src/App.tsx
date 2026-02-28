@@ -20,7 +20,7 @@ export default function App() {
       <BrowserRouter>
         <div className="flex h-screen bg-background overflow-hidden">
           <TabNav />
-          <main className="flex-1 overflow-auto p-8">
+          <main className="flex-1 overflow-hidden">
             <Routes>
               <Route path="/" element={<RootRedirect />} />
               <Route path="/workspace" element={<WorkspaceSetup />} />

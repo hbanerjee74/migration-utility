@@ -5,7 +5,7 @@ import { useWorkflowStore } from '../stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import StepActions from '@/components/step-actions';
+import TabLayout from '@/components/tab-layout';
 import { useAutosave } from '@/hooks/use-autosave';
 
 interface Workspace {
@@ -43,8 +43,7 @@ export default function WorkspaceSetup() {
     }).catch((e) => console.error('workspace_get failed', e));
   }, []);
 
-  // Autosave: records that the user has touched this section; actual SQLite
-  // write only happens on Apply (no workspace_update command exists yet).
+  // Autosave: records that the user edited this section (no workspace_update yet).
   const { status: autosaveStatus, flush: flushAutosave } = useAutosave(
     { name, repoPath, fabricUrl },
     async (data) => {
@@ -68,7 +67,7 @@ export default function WorkspaceSetup() {
 
   async function handleApply() {
     if (!validate()) return;
-    flushAutosave(); // cancel any pending autosave timer
+    flushAutosave();
     setApplying(true);
     setApplyError(null);
     try {
@@ -116,13 +115,15 @@ export default function WorkspaceSetup() {
   }
 
   return (
-    <div className="max-w-lg">
-      <h1 className="text-base font-semibold tracking-tight">Workspace Setup</h1>
-      <p className="text-sm text-muted-foreground mt-1 mb-6">
-        Configure your migration workspace to get started.
-      </p>
-
-      <div className="flex flex-col gap-4">
+    <TabLayout
+      title="Workspace Setup"
+      description="Configure your migration workspace to get started."
+      onApply={handleApply}
+      isApplying={applying}
+      autosaveStatus={autosaveStatus}
+      autosaveSavedAt={stepSavedAt}
+    >
+      <div className="max-w-lg flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <Label htmlFor="workspace-name">
             Workspace name <span className="text-destructive">*</span>
@@ -187,30 +188,23 @@ export default function WorkspaceSetup() {
           <p className="text-xs text-destructive" role="alert">{applyError}</p>
         )}
 
-        <StepActions
-          onApply={handleApply}
-          isApplying={applying}
-          autosaveStatus={autosaveStatus}
-          autosaveSavedAt={stepSavedAt}
-        />
+        {import.meta.env.DEV && (
+          <div className="mt-4 pt-6 border-t border-dashed">
+            <Button
+              data-testid="btn-load-mock-data"
+              onClick={handleSeedMockData}
+              disabled={seeding}
+              variant="ghost"
+              size="sm"
+            >
+              {seeding ? 'Loading…' : 'Load mock data'}
+            </Button>
+            {seedError && (
+              <p className="text-xs text-destructive mt-2" role="alert">{seedError}</p>
+            )}
+          </div>
+        )}
       </div>
-
-      {import.meta.env.DEV && (
-        <div className="mt-8 pt-6 border-t border-dashed">
-          <Button
-            data-testid="btn-load-mock-data"
-            onClick={handleSeedMockData}
-            disabled={seeding}
-            variant="ghost"
-            size="sm"
-          >
-            {seeding ? 'Loading…' : 'Load mock data'}
-          </Button>
-          {seedError && (
-            <p className="text-xs text-destructive mt-2" role="alert">{seedError}</p>
-          )}
-        </div>
-      )}
-    </div>
+    </TabLayout>
   );
 }
