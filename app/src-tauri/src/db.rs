@@ -200,7 +200,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(column_count, 1, "migration_repo_name column should be added");
+        assert_eq!(
+            column_count, 1,
+            "migration_repo_name column should be added"
+        );
 
         let version_4_applied: i64 = conn
             .query_row(

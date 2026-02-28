@@ -216,8 +216,6 @@ Agent-suggested, FDE-confirmed settings per selected table (table config step).
 | `pii_columns` | TEXT | JSON array of column names |
 | `confirmed_at` | TEXT | ISO 8601 timestamp — null until FDE confirms |
 
----
-
 ## Design Notes
 
 - **`warehouse_item_id` is always a FK to `items.id`** — used in every sub-warehouse

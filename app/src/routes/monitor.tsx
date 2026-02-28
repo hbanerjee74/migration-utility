@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Play, CheckCircle2, Loader2, Clock } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
@@ -174,11 +175,58 @@ export default function MonitorSurface() {
   const { migrationStatus, setMigrationStatus } = useWorkflowStore();
   const [launching, setLaunching] = useState(false);
   const [logText, setLogText] = useState('');
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const unlistenPromise = listen<{
+      requestId: string;
+      eventType: string;
+      content?: string | null;
+      done?: boolean | null;
+      subtype?: string | null;
+      toolName?: string | null;
+      totalCostUsd?: number | null;
+      inputTokens?: number | null;
+      outputTokens?: number | null;
+    }>('monitor-agent-stream', (event) => {
+      if (!mounted) return;
+      const payload = event.payload;
+      if (!payload) return;
+      if (activeRequestId && payload.requestId !== activeRequestId) return;
+      if (!activeRequestId) setActiveRequestId(payload.requestId);
+
+      if (payload.eventType === 'agent_response' && payload.content) {
+        setLogText((prev) => `${prev}${payload.content}`);
+        return;
+      }
+
+      if (payload.eventType === 'agent_event' && payload.subtype === 'tool_progress' && payload.toolName) {
+        setLogText((prev) => `${prev}\n[tool] ${payload.toolName}`);
+        return;
+      }
+
+      if (payload.eventType === 'agent_event' && payload.subtype === 'result') {
+        setLogText((prev) => `${prev}\n[result] cost=$${(payload.totalCostUsd ?? 0).toFixed(4)} tokens=${payload.inputTokens ?? 0}/${payload.outputTokens ?? 0}`);
+        return;
+      }
+
+      if (payload.eventType === 'error' && payload.content) {
+        setLogText((prev) => `${prev}\n[error] ${payload.content}`);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      void unlistenPromise.then((fn) => fn());
+    };
+  }, [activeRequestId]);
 
   async function handleLaunch() {
     setLaunching(true);
     setMigrationStatus('running');
-    setLogText('Launching sidecar agent…');
+    setActiveRequestId(null);
+    setLogText('Launching sidecar agent...\n');
     logger.info('monitor: migration launched');
     try {
       const result = await monitorLaunchAgent({
@@ -186,7 +234,9 @@ export default function MonitorSurface() {
           'Validate migration runtime wiring and report current readiness in concise bullet points.',
         systemPrompt: 'You are the migration utility orchestrator.',
       });
-      setLogText(result);
+      if (result.trim()) {
+        setLogText((prev) => (prev.trim() ? `${prev}\n\n${result}` : result));
+      }
       logger.info('monitor: agent response received');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

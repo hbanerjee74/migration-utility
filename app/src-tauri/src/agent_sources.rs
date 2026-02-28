@@ -30,10 +30,10 @@ fn resolve_source_dir(app: &AppHandle) -> Result<PathBuf, String> {
     // Local dev fallback when running unbundled.
     candidates.push(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join("agent-sources")
-        .join("workspace"),
+            .join("..")
+            .join("..")
+            .join("agent-sources")
+            .join("workspace"),
     );
 
     resolve_source_dir_from_candidates(&candidates)
@@ -164,8 +164,14 @@ fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
 
 fn ensure_dir(path: &Path, label: &str) -> Result<(), String> {
     if path.exists() {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|e| format!("agent_sources: failed to stat {} {}: {}", label, path.display(), e))?;
+        let metadata = fs::symlink_metadata(path).map_err(|e| {
+            format!(
+                "agent_sources: failed to stat {} {}: {}",
+                label,
+                path.display(),
+                e
+            )
+        })?;
         if metadata.is_dir() && !metadata.file_type().is_symlink() {
             return Ok(());
         }
@@ -183,8 +189,14 @@ fn ensure_dir(path: &Path, label: &str) -> Result<(), String> {
 }
 
 fn remove_path(path: &Path, label: &str) -> Result<(), String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|e| format!("agent_sources: failed to stat {} {}: {}", label, path.display(), e))?;
+    let metadata = fs::symlink_metadata(path).map_err(|e| {
+        format!(
+            "agent_sources: failed to stat {} {}: {}",
+            label,
+            path.display(),
+            e
+        )
+    })?;
     if metadata.is_dir() && !metadata.file_type().is_symlink() {
         fs::remove_dir_all(path).map_err(|e| {
             format!(
@@ -278,7 +290,10 @@ mod tests {
 
         deploy_agent_sources(&source, &workspace).unwrap();
 
-        assert_eq!(fs::read_to_string(existing_claude.join("CLAUDE.md")).unwrap(), "old");
+        assert_eq!(
+            fs::read_to_string(existing_claude.join("CLAUDE.md")).unwrap(),
+            "old"
+        );
         assert!(!existing_claude.join("skills").join("old-skill.md").exists());
         assert!(!existing_claude.join("agents").join("old-agent.md").exists());
         assert_eq!(
@@ -289,7 +304,10 @@ mod tests {
             fs::read_to_string(existing_claude.join("agents").join("new-agent.md")).unwrap(),
             "new agent"
         );
-        assert_eq!(fs::read_to_string(existing_claude.join("custom.md")).unwrap(), "keep");
+        assert_eq!(
+            fs::read_to_string(existing_claude.join("custom.md")).unwrap(),
+            "keep"
+        );
     }
 
     #[test]

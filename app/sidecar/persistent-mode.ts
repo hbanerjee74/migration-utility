@@ -140,7 +140,7 @@ export async function runPersistent(): Promise<void> {
         writeLine({ type: 'request_complete', request_id: message.request_id });
         continue;
       }
-      const session = new StreamSession(null, message.config);
+      const session = new StreamSession(message.config);
       activeSessions.set(message.session_id, session);
       const p = session.start(message.request_id, message.config).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -191,4 +191,3 @@ export async function runPersistent(): Promise<void> {
     await Promise.allSettled([...inFlight]);
   }
 }
-
