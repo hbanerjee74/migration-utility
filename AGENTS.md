@@ -79,7 +79,11 @@ Determine what you changed, then pick the right runner:
 | What changed | Tests to run |
 |---|---|
 | Rust command or `db.rs` | `cargo test --manifest-path app/src-tauri/Cargo.toml <module>` |
+| Frontend store / hook | `npm run test:unit` |
+| Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
+| Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
 | Bun sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
+| Node sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
 | Python orchestrator / agents | `cd orchestrator && uv run pytest <module>` |
 | Unsure | all of the above |
 

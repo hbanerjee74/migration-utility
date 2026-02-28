@@ -6,3 +6,5 @@ Each topic gets its own subdirectory with a `README.md`.
 
 - [Database Design](database/README.md)
 - [UI Patterns](ui-patterns/README.md) — surfaces, user flows, screen-level patterns, and interactive mockup
+- [Branding](branding/README.md)
+- [Sidecar](sidecar/README.md)
