@@ -27,6 +27,8 @@ serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+tiberius = { version = "0.12", default-features = false, features = ["rustls"] }
 thiserror = "2"
 log = "0.4"
 uuid = { version = "1", features = ["v4"] }
@@ -34,4 +36,3 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tempfile = "3"
-

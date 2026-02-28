@@ -40,6 +40,15 @@ One row per Fabric workspace connected to this app.
 | `id` | TEXT PK | `WorkspaceInfo.id` (UUID) |
 | `display_name` | TEXT NOT NULL | `WorkspaceInfo.displayName` |
 | `migration_repo_path` | TEXT NOT NULL | Local path (FDE-provided) |
+| `source_type` | TEXT | Source connector type: `sql_server \| fabric_warehouse` |
+| `source_server` | TEXT | Source SQL endpoint / host |
+| `source_database` | TEXT | Source database / catalog name |
+| `source_port` | INTEGER | Source SQL port (typically `1433`) |
+| `source_authentication_mode` | TEXT | Source auth mode (`sql_password \| entra_service_principal`) |
+| `source_username` | TEXT | Login / principal ID |
+| `source_password` | TEXT | Password / secret |
+| `source_encrypt` | INTEGER | Transport encryption enabled (`0/1`) |
+| `source_trust_server_certificate` | INTEGER | Trust server cert toggle (`0/1`) |
 | `created_at` | TEXT NOT NULL | App-generated timestamp |
 
 ### `items`

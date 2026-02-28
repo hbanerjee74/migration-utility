@@ -6,26 +6,110 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import SettingsPanelShell from '@/components/settings/settings-panel-shell';
-import { githubListRepos, workspaceApplyAndClone, workspaceGet } from '@/lib/tauri';
+import {
+  workspaceDiscoverSourceDatabases,
+  githubListRepos,
+  workspaceApplyAndClone,
+  workspaceGet,
+  workspaceResetState,
+  workspaceTestSourceConnection,
+} from '@/lib/tauri';
 import type { GitHubRepo } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
 const DEFAULT_WORKSPACE_NAME = 'Migration Workspace';
 
+type SourceType = 'sql_server' | 'fabric_warehouse';
+type SourceAuthenticationMode = 'sql_password' | 'entra_service_principal';
+
+const SOURCE_DEFAULTS: Record<
+  SourceType,
+  {
+    port: number;
+    authenticationMode: SourceAuthenticationMode;
+    encrypt: boolean;
+    trustServerCertificate: boolean;
+  }
+> = {
+  sql_server: {
+    port: 1433,
+    authenticationMode: 'sql_password',
+    encrypt: true,
+    trustServerCertificate: false,
+  },
+  fabric_warehouse: {
+    port: 1433,
+    authenticationMode: 'entra_service_principal',
+    encrypt: true,
+    trustServerCertificate: false,
+  },
+};
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object') {
+    const maybe = err as { message?: unknown; kind?: unknown };
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message;
+    }
+    if (typeof maybe.kind === 'string' && maybe.kind.trim()) {
+      return maybe.kind;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'Unknown error';
+    }
+  }
+  return String(err);
+}
+
 export default function WorkspaceTab() {
-  const { setWorkspaceId, migrationStatus } = useWorkflowStore();
+  const { setWorkspaceId, clearWorkspaceId, migrationStatus, reset } = useWorkflowStore();
   const isLocked = migrationStatus === 'running';
 
   const [workspaceName, setWorkspaceName] = useState(DEFAULT_WORKSPACE_NAME);
   const [repoName, setRepoName] = useState('');
   const [repoPath, setRepoPath] = useState('');
-  const [fabricUrl, setFabricUrl] = useState('');
-  const [fabricServicePrincipalId, setFabricServicePrincipalId] = useState('');
-  const [fabricServicePrincipalSecret, setFabricServicePrincipalSecret] = useState('');
-  const [errors, setErrors] = useState<{ repoName?: string; repoPath?: string }>({});
+  const [repoSelected, setRepoSelected] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(false);
+
+  const [sourceType, setSourceType] = useState<SourceType>('fabric_warehouse');
+  const [sourceServer, setSourceServer] = useState('');
+  const [sourceDatabase, setSourceDatabase] = useState('');
+  const [sourceDatabases, setSourceDatabases] = useState<string[]>([]);
+  const [sourcePort, setSourcePort] = useState(String(SOURCE_DEFAULTS.fabric_warehouse.port));
+  const [sourceAuthenticationMode, setSourceAuthenticationMode] =
+    useState<SourceAuthenticationMode>(SOURCE_DEFAULTS.fabric_warehouse.authenticationMode);
+  const [sourceUsername, setSourceUsername] = useState('');
+  const [sourcePassword, setSourcePassword] = useState('');
+  const [sourceEncrypt, setSourceEncrypt] = useState(SOURCE_DEFAULTS.fabric_warehouse.encrypt);
+  const [sourceTrustServerCertificate, setSourceTrustServerCertificate] = useState(
+    SOURCE_DEFAULTS.fabric_warehouse.trustServerCertificate,
+  );
+
+  const [errors, setErrors] = useState<{
+    repoName?: string;
+    repoPath?: string;
+    sourceServer?: string;
+    sourceDatabase?: string;
+    sourcePort?: string;
+    sourceUsername?: string;
+    sourcePassword?: string;
+  }>({});
   const [applying, setApplying] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmationInput, setResetConfirmationInput] = useState('');
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testConnectionMessage, setTestConnectionMessage] = useState<string | null>(null);
+  const [testConnectionError, setTestConnectionError] = useState<string | null>(null);
+  const [connectionTestPassed, setConnectionTestPassed] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [applySuccessMessage, setApplySuccessMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -37,18 +121,36 @@ export default function WorkspaceTab() {
   useEffect(() => {
     workspaceGet()
       .then((ws) => {
-        if (ws) {
-          setWorkspaceId(ws.id);
-          setWorkspaceName(ws.displayName || DEFAULT_WORKSPACE_NAME);
-          setRepoName(ws.migrationRepoName ?? '');
-          setRepoPath(ws.migrationRepoPath ?? '');
-          setFabricUrl(ws.fabricUrl ?? '');
-          setFabricServicePrincipalId(ws.fabricServicePrincipalId ?? '');
-          setFabricServicePrincipalSecret(ws.fabricServicePrincipalSecret ?? '');
-        }
+        if (!ws) return;
+
+        const nextSourceType: SourceType = ws.sourceType ?? 'fabric_warehouse';
+        const nextDefaults = SOURCE_DEFAULTS[nextSourceType];
+
+        setWorkspaceId(ws.id);
+        setWorkspaceName(ws.displayName || DEFAULT_WORKSPACE_NAME);
+        setRepoName(ws.migrationRepoName ?? '');
+        setRepoPath(ws.migrationRepoPath ?? '');
+        setRepoSelected(Boolean(ws.migrationRepoName));
+        setIsConfigured(Boolean(ws.migrationRepoName && ws.migrationRepoPath));
+
+        setSourceType(nextSourceType);
+        setSourceServer(ws.sourceServer ?? '');
+        const initialDatabase = ws.sourceDatabase ?? '';
+        setSourceDatabase(initialDatabase);
+        setSourceDatabases(initialDatabase ? [initialDatabase] : []);
+        setSourcePort(String(ws.sourcePort ?? nextDefaults.port));
+        setSourceAuthenticationMode(ws.sourceAuthenticationMode ?? nextDefaults.authenticationMode);
+        setSourceUsername(ws.sourceUsername ?? ws.fabricServicePrincipalId ?? '');
+        setSourcePassword(ws.sourcePassword ?? ws.fabricServicePrincipalSecret ?? '');
+        setSourceEncrypt(ws.sourceEncrypt ?? nextDefaults.encrypt);
+        setSourceTrustServerCertificate(
+          ws.sourceTrustServerCertificate ?? nextDefaults.trustServerCertificate,
+        );
       })
       .catch((e) => logger.error('workspace_get failed', e));
   }, [setWorkspaceId]);
+
+  const pageLocked = isLocked || isConfigured;
 
   useEffect(() => {
     const query = repoName.trim();
@@ -82,17 +184,74 @@ export default function WorkspaceTab() {
   }, [repoName]);
 
   const showSuggestions = useMemo(
-    () => suggestionsOpen && !isLocked && (suggestionsLoading || repoSuggestions.length > 0),
-    [suggestionsOpen, isLocked, suggestionsLoading, repoSuggestions.length],
+    () => suggestionsOpen && !pageLocked && (suggestionsLoading || repoSuggestions.length > 0),
+    [suggestionsOpen, pageLocked, suggestionsLoading, repoSuggestions.length],
   );
   const activeSuggestionId =
     selectedSuggestionIdx >= 0 ? `${repoSuggestionsListboxId}-option-${selectedSuggestionIdx}` : undefined;
+  const resetToken = `RESET ${sourceDatabase.trim()}`;
+
+  function clearWorkspaceForm() {
+    setWorkspaceName(DEFAULT_WORKSPACE_NAME);
+    setRepoName('');
+    setRepoPath('');
+    setRepoSelected(false);
+
+    setSourceType('fabric_warehouse');
+    setSourceServer('');
+    setSourceDatabase('');
+    setSourceDatabases([]);
+    setSourcePort(String(SOURCE_DEFAULTS.fabric_warehouse.port));
+    setSourceAuthenticationMode(SOURCE_DEFAULTS.fabric_warehouse.authenticationMode);
+    setSourceUsername('');
+    setSourcePassword('');
+    setSourceEncrypt(SOURCE_DEFAULTS.fabric_warehouse.encrypt);
+    setSourceTrustServerCertificate(SOURCE_DEFAULTS.fabric_warehouse.trustServerCertificate);
+
+    setConnectionTestPassed(false);
+    setTestConnectionMessage(null);
+    setTestConnectionError(null);
+    setApplyError(null);
+    setApplySuccessMessage(null);
+    setResetError(null);
+    setErrors({});
+  }
 
   function validate(): boolean {
-    const errs: { repoName?: string; repoPath?: string } = {};
-    if (!repoName.trim()) errs.repoName = 'Repo name is required';
-    else if (!repoName.includes('/')) errs.repoName = 'Repo name must be owner/repo';
+    const errs: {
+      repoName?: string;
+      repoPath?: string;
+      sourceServer?: string;
+      sourceDatabase?: string;
+      sourcePort?: string;
+      sourceUsername?: string;
+      sourcePassword?: string;
+    } = {};
+
+    if (!repoName.trim()) errs.repoName = 'Repo selection is required';
+    else if (!repoSelected) errs.repoName = 'Select a repo from the picklist';
+
     if (!repoPath.trim()) errs.repoPath = 'Repo path is required';
+    if (!sourceServer.trim()) errs.sourceServer = 'Server is required';
+    if (!sourceDatabase.trim()) errs.sourceDatabase = 'Database is required';
+
+    const parsedPort = Number(sourcePort);
+    if (!sourcePort.trim()) errs.sourcePort = 'Port is required';
+    else if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
+      errs.sourcePort = 'Port must be a positive integer';
+    }
+
+    if (!sourceUsername.trim()) {
+      errs.sourceUsername =
+        sourceAuthenticationMode === 'sql_password'
+          ? 'SQL login is required'
+          : 'Service principal ID is required';
+    }
+    if (!sourcePassword.trim()) {
+      errs.sourcePassword =
+        sourceAuthenticationMode === 'sql_password' ? 'Password is required' : 'Secret is required';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -104,35 +263,163 @@ export default function WorkspaceTab() {
 
   function applySuggestion(repo: GitHubRepo) {
     setRepoName(repo.fullName);
+    setRepoSelected(true);
     setSuggestionsOpen(false);
     setRepoSuggestions([]);
     setSelectedSuggestionIdx(-1);
   }
 
+  function handleSourceTypeChange(nextType: SourceType) {
+    const defaults = SOURCE_DEFAULTS[nextType];
+    setSourceType(nextType);
+    setSourcePort(String(defaults.port));
+    setSourceAuthenticationMode(defaults.authenticationMode);
+    setSourceEncrypt(defaults.encrypt);
+    setSourceTrustServerCertificate(defaults.trustServerCertificate);
+    setSourceDatabase('');
+    setSourceDatabases([]);
+  }
+
+  function invalidateConnectionTestState() {
+    if (connectionTestPassed) setConnectionTestPassed(false);
+    if (testConnectionMessage) setTestConnectionMessage(null);
+    if (testConnectionError) setTestConnectionError(null);
+    if (applySuccessMessage) setApplySuccessMessage(null);
+    if (sourceDatabases.length > 0) setSourceDatabases([]);
+    if (sourceDatabase) setSourceDatabase('');
+  }
+
   async function handleApply() {
     if (!validate()) return;
 
+    const sourceServerValue = sourceServer.trim();
+    const sourceDatabaseValue = sourceDatabase.trim();
+    const sourcePortValue = Number(sourcePort);
+    const sourceUsernameValue = sourceUsername.trim();
+    const sourcePasswordValue = sourcePassword.trim();
+
     setApplying(true);
     setApplyError(null);
+    setApplySuccessMessage(null);
     try {
       const ws = await workspaceApplyAndClone({
         name: workspaceName.trim() || DEFAULT_WORKSPACE_NAME,
         migrationRepoName: repoName.trim(),
         migrationRepoPath: repoPath.trim(),
-        fabricUrl: fabricUrl.trim() || null,
-        fabricServicePrincipalId: fabricServicePrincipalId.trim() || null,
-        fabricServicePrincipalSecret: fabricServicePrincipalSecret.trim() || null,
+        fabricUrl: null,
+        fabricServicePrincipalId:
+          sourceType === 'fabric_warehouse' ? sourceUsernameValue || null : null,
+        fabricServicePrincipalSecret:
+          sourceType === 'fabric_warehouse' ? sourcePasswordValue || null : null,
+        sourceType,
+        sourceServer: sourceServerValue,
+        sourceDatabase: sourceDatabaseValue,
+        sourcePort: sourcePortValue,
+        sourceAuthenticationMode,
+        sourceUsername: sourceUsernameValue,
+        sourcePassword: sourcePasswordValue,
+        sourceEncrypt,
+        sourceTrustServerCertificate,
       });
       setWorkspaceId(ws.id);
       setWorkspaceName(ws.displayName);
+      setIsConfigured(true);
+      setApplySuccessMessage('Workspace applied successfully. Repository cloned locally.');
       logger.info('workspace: applied and repo cloned');
     } catch (err) {
       logger.error('workspace apply failed', err);
-      setApplyError(err instanceof Error ? err.message : String(err));
+      setApplyError(getErrorMessage(err));
     } finally {
       setApplying(false);
     }
   }
+
+  async function handleResetMigration() {
+    setResetError(null);
+    try {
+      await workspaceResetState();
+      reset();
+      clearWorkspaceId();
+      setIsConfigured(false);
+      setResetConfirmationInput('');
+      setResetDialogOpen(false);
+      clearWorkspaceForm();
+      logger.info('workspace: reset migration state');
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setResetError(message);
+      logger.error('workspace reset failed', err);
+    }
+  }
+
+  async function handleTestConnection() {
+    const sourceServerValue = sourceServer.trim();
+    const sourcePortValue = Number(sourcePort);
+    const sourceUsernameValue = sourceUsername.trim();
+    const sourcePasswordValue = sourcePassword.trim();
+    if (
+      !sourceServerValue ||
+      !sourceUsernameValue ||
+      !sourcePasswordValue ||
+      !Number.isInteger(sourcePortValue) ||
+      sourcePortValue <= 0
+    ) {
+      setTestConnectionMessage(null);
+      setTestConnectionError(
+        'Enter server, credentials, and a valid port before testing connection.',
+      );
+      return;
+    }
+
+    setTestingConnection(true);
+    setTestConnectionMessage(null);
+    setTestConnectionError(null);
+    try {
+      const message = await workspaceTestSourceConnection({
+        sourceType,
+        sourceServer: sourceServerValue,
+        sourcePort: sourcePortValue,
+        sourceAuthenticationMode,
+        sourceUsername: sourceUsernameValue,
+        sourcePassword: sourcePasswordValue,
+        sourceEncrypt,
+        sourceTrustServerCertificate,
+      });
+      const databases = await workspaceDiscoverSourceDatabases({
+        sourceType,
+        sourceServer: sourceServerValue,
+        sourcePort: sourcePortValue,
+        sourceAuthenticationMode,
+        sourceUsername: sourceUsernameValue,
+        sourcePassword: sourcePasswordValue,
+        sourceEncrypt,
+        sourceTrustServerCertificate,
+      });
+      setSourceDatabases(databases);
+      if (databases.length === 0) {
+        setSourceDatabase('');
+        setConnectionTestPassed(false);
+        setTestConnectionMessage(null);
+        setTestConnectionError('Connection succeeded, but no accessible databases were discovered.');
+        return;
+      }
+      setSourceDatabase((current) => (databases.includes(current) ? current : databases[0]));
+      setTestConnectionMessage(message);
+      setConnectionTestPassed(true);
+      logger.info('workspace: source connection test passed');
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setTestConnectionError(message);
+      setConnectionTestPassed(false);
+      logger.error('workspace source connection test failed', err);
+    } finally {
+      setTestingConnection(false);
+    }
+  }
+
+  const isSqlAuth = sourceAuthenticationMode === 'sql_password';
+
+  const canApply = !pageLocked && !applying && connectionTestPassed && repoSelected && !!repoPath.trim();
 
   return (
     <SettingsPanelShell
@@ -140,72 +427,262 @@ export default function WorkspaceTab() {
       labelTestId="settings-workspace-group-label"
       groupLabel={
         <span className="inline-flex items-center gap-1.5">
-          {isLocked ? <Lock className="size-3" /> : null}
-          {isLocked ? 'Locked during active migration · Reset to change' : 'Set once per migration'}
+          {pageLocked ? <Lock className="size-3" /> : null}
+          {pageLocked ? 'Workspace configured and locked' : 'Set once per migration'}
         </span>
       }
     >
       <div data-testid="settings-workspace-tab" className="flex flex-col gap-3">
-        {isLocked ? (
+        {pageLocked ? (
           <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
-            Locked during active migration. Changes are not saved while a migration is running.
+            Workspace is locked after apply. Reset Migration to edit settings.
           </p>
         ) : null}
 
         <Card className="gap-0 py-5" data-testid="settings-workspace-fabric-card">
           <CardHeader className="pb-3">
-            <CardTitle>Fabric workspace</CardTitle>
+            <CardTitle>Source connection</CardTitle>
             <CardDescription className="mt-0.5">
-              The source Fabric workspace containing the stored procedures to migrate.
+              Configure source credentials, test connectivity, then pick a discovered database.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0 flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="fabric-url">Workspace URL</Label>
-              <Input
-                id="fabric-url"
-                data-testid="input-fabric-url"
-                type="text"
-                value={fabricUrl}
-                onChange={(e) => setFabricUrl(e.target.value)}
-                placeholder="https://app.fabric.microsoft.com/groups/..."
-                className="font-mono text-sm"
-                disabled={isLocked}
-              />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="source-type">Data source type</Label>
+                <select
+                  id="source-type"
+                  data-testid="select-source-type"
+                  value={sourceType}
+                  onChange={(e) => {
+                    handleSourceTypeChange(e.target.value as SourceType);
+                    invalidateConnectionTestState();
+                  }}
+                  className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  disabled={pageLocked}
+                >
+                  <option value="sql_server">SQL Server</option>
+                  <option value="fabric_warehouse">Fabric Warehouse</option>
+                </select>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="fabric-sp-id" className="text-sm text-muted-foreground">
-                  Service principal ID
-                </Label>
+                <Label htmlFor="source-server">Server</Label>
                 <Input
-                  id="fabric-sp-id"
-                  data-testid="input-fabric-service-principal-id"
+                  id="source-server"
+                  data-testid="input-source-server"
                   type="text"
-                  value={fabricServicePrincipalId}
-                  onChange={(e) => setFabricServicePrincipalId(e.target.value)}
-                  placeholder="sp-vibedata-migration"
+                  value={sourceServer}
+                  onChange={(e) => {
+                    setSourceServer(e.target.value);
+                    invalidateConnectionTestState();
+                  }}
+                  placeholder={
+                    sourceType === 'fabric_warehouse'
+                      ? 'xxxx.datawarehouse.fabric.microsoft.com'
+                      : 'sqlserver.example.com'
+                  }
                   className="font-mono text-sm"
-                  disabled={isLocked}
+                  disabled={pageLocked}
                 />
+                {errors.sourceServer ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {errors.sourceServer}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="fabric-secret" className="text-sm text-muted-foreground">
-                  Secret
-                </Label>
+                <Label htmlFor="source-port">Port</Label>
                 <Input
-                  id="fabric-secret"
-                  data-testid="input-fabric-secret"
-                  type="password"
-                  value={fabricServicePrincipalSecret}
-                  onChange={(e) => setFabricServicePrincipalSecret(e.target.value)}
-                  placeholder="••••••••••••"
+                  id="source-port"
+                  data-testid="input-source-port"
+                  type="text"
+                  value={sourcePort}
+                  onChange={(e) => {
+                    setSourcePort(e.target.value);
+                    invalidateConnectionTestState();
+                  }}
+                  placeholder="1433"
                   className="font-mono text-sm"
-                  disabled={isLocked}
+                  disabled={pageLocked}
                 />
+                {errors.sourcePort ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {errors.sourcePort}
+                  </p>
+                ) : null}
               </div>
             </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="source-auth-mode">Authentication</Label>
+              <select
+                id="source-auth-mode"
+                data-testid="select-source-authentication-mode"
+                value={sourceAuthenticationMode}
+                onChange={(e) => {
+                  setSourceAuthenticationMode(e.target.value as SourceAuthenticationMode);
+                  invalidateConnectionTestState();
+                }}
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                disabled={pageLocked || sourceType === 'fabric_warehouse'}
+              >
+                <option value="sql_password">SQL Login</option>
+                <option value="entra_service_principal">Entra Service Principal</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="source-username" className="text-sm text-muted-foreground">
+                  {isSqlAuth ? 'SQL login' : 'Service principal ID'}
+                </Label>
+                <Input
+                  id="source-username"
+                  data-testid="input-source-username"
+                  type="text"
+                  value={sourceUsername}
+                  onChange={(e) => {
+                    setSourceUsername(e.target.value);
+                    invalidateConnectionTestState();
+                  }}
+                  placeholder={isSqlAuth ? 'sa' : 'sp-vibedata-migration'}
+                  className="font-mono text-sm"
+                  disabled={pageLocked}
+                />
+                {errors.sourceUsername ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {errors.sourceUsername}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="source-password" className="text-sm text-muted-foreground">
+                  {isSqlAuth ? 'Password' : 'Secret'}
+                </Label>
+                <Input
+                  id="source-password"
+                  data-testid="input-source-password"
+                  type="password"
+                  value={sourcePassword}
+                  onChange={(e) => {
+                    setSourcePassword(e.target.value);
+                    invalidateConnectionTestState();
+                  }}
+                  placeholder="••••••••••••"
+                  className="font-mono text-sm"
+                  disabled={pageLocked}
+                />
+                {errors.sourcePassword ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {errors.sourcePassword}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="inline-flex items-center gap-2 text-sm" htmlFor="source-encrypt">
+                <input
+                  id="source-encrypt"
+                  data-testid="checkbox-source-encrypt"
+                  type="checkbox"
+                  checked={sourceEncrypt}
+                  onChange={(e) => {
+                    setSourceEncrypt(e.target.checked);
+                    invalidateConnectionTestState();
+                  }}
+                  disabled={pageLocked}
+                />
+                Encrypt connection
+              </label>
+              <label
+                className="inline-flex items-center gap-2 text-sm"
+                htmlFor="source-trust-server-certificate"
+              >
+                <input
+                  id="source-trust-server-certificate"
+                  data-testid="checkbox-source-trust-server-certificate"
+                  type="checkbox"
+                  checked={sourceTrustServerCertificate}
+                  onChange={(e) => {
+                    setSourceTrustServerCertificate(e.target.checked);
+                    invalidateConnectionTestState();
+                  }}
+                  disabled={pageLocked}
+                />
+                Trust server certificate
+              </label>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Step 1: test server/auth credentials
+                </div>
+                <Button
+                  type="button"
+                  data-testid="btn-test-connection"
+                  onClick={handleTestConnection}
+                  disabled={pageLocked || testingConnection}
+                  variant="outline"
+                  size="sm"
+                >
+                  {testingConnection ? 'Testing…' : 'Test connection'}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Step 2: select database from discovered list
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="source-database">Database</Label>
+                <select
+                  id="source-database"
+                  data-testid="input-source-database"
+                  value={sourceDatabase}
+                  onChange={(e) => {
+                    setSourceDatabase(e.target.value);
+                  }}
+                  className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 font-mono"
+                  disabled={pageLocked || sourceDatabases.length === 0}
+                >
+                  {sourceDatabases.length === 0 ? (
+                    <option value="">Test connection to discover databases</option>
+                  ) : null}
+                  {sourceDatabases.map((db) => (
+                    <option key={db} value={db}>
+                      {db}
+                    </option>
+                  ))}
+                </select>
+                {errors.sourceDatabase ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {errors.sourceDatabase}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {testConnectionError ? (
+              <p
+                className="text-xs text-destructive"
+                role="alert"
+                data-testid="workspace-test-connection-error"
+              >
+                {testConnectionError}
+              </p>
+            ) : null}
+            {testConnectionMessage ? (
+              <p
+                className="text-xs"
+                style={{ color: 'var(--color-seafoam)' }}
+                data-testid="workspace-test-connection-success"
+              >
+                {testConnectionMessage}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -213,7 +690,7 @@ export default function WorkspaceTab() {
           <CardHeader className="pb-3">
             <CardTitle>Migration repo</CardTitle>
             <CardDescription className="mt-0.5">
-              The GitHub repo where migration state and agent outputs are committed.
+              Select from repositories you can access.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0 flex flex-col gap-3">
@@ -226,7 +703,10 @@ export default function WorkspaceTab() {
                 data-testid="input-repo-name"
                 type="text"
                 value={repoName}
-                onChange={(e) => setRepoName(e.target.value)}
+                onChange={(e) => {
+                  setRepoName(e.target.value);
+                  setRepoSelected(false);
+                }}
                 onFocus={() => setSuggestionsOpen(true)}
                 onBlur={() => {
                   setTimeout(() => setSuggestionsOpen(false), 120);
@@ -254,7 +734,7 @@ export default function WorkspaceTab() {
                 aria-activedescendant={showSuggestions ? activeSuggestionId : undefined}
                 placeholder="owner/repo"
                 className="font-mono text-sm"
-                disabled={isLocked}
+                disabled={pageLocked}
               />
 
               {showSuggestions ? (
@@ -304,7 +784,7 @@ export default function WorkspaceTab() {
           <CardHeader className="pb-3">
             <CardTitle>Working directory</CardTitle>
             <CardDescription className="mt-0.5">
-              Where the migration repo is cloned on your machine.
+              Choose where the selected repository should be cloned locally.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0 flex flex-col gap-3">
@@ -318,17 +798,18 @@ export default function WorkspaceTab() {
                   data-testid="input-repo-path"
                   type="text"
                   value={repoPath}
-                  onChange={(e) => setRepoPath(e.target.value)}
+                  onChange={() => {}}
                   className="flex-1"
-                  placeholder="~/vibedata-migration"
-                  disabled={isLocked}
+                  placeholder="/path/to/local-clone"
+                  disabled
+                  readOnly
                 />
                 <Button
                   type="button"
                   data-testid="btn-pick-repo-path"
                   variant="outline"
                   onClick={pickDirectory}
-                  disabled={isLocked}
+                  disabled={pageLocked}
                 >
                   Browse
                 </Button>
@@ -338,9 +819,6 @@ export default function WorkspaceTab() {
                   {errors.repoPath}
                 </p>
               ) : null}
-              <p className="text-sm text-muted-foreground">
-                Default: <code>~/vibedata-migration</code>. Changeable when no migration is active.
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -350,19 +828,100 @@ export default function WorkspaceTab() {
             {applyError}
           </p>
         ) : null}
+        {applySuccessMessage ? (
+          <p
+            className="text-xs"
+            style={{ color: 'var(--color-seafoam)' }}
+            data-testid="workspace-apply-success"
+          >
+            {applySuccessMessage}
+          </p>
+        ) : null}
+        {resetError ? (
+          <p className="text-xs text-destructive" role="alert" data-testid="workspace-reset-error">
+            {resetError}
+          </p>
+        ) : null}
 
-        <div className="flex items-center justify-end" data-testid="settings-workspace-actions">
+        <div className="flex items-center justify-end gap-2" data-testid="settings-workspace-actions">
           <Button
             type="button"
             data-testid="btn-apply"
             onClick={handleApply}
-            disabled={isLocked || applying}
+            disabled={!canApply}
             size="sm"
           >
             {applying ? 'Applying…' : 'Apply'}
           </Button>
         </div>
+
+        <Card className="gap-0 py-5 border-destructive/40" data-testid="settings-workspace-danger-zone">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+            <CardDescription className="mt-0.5">
+              Reset local migration state and workspace settings. Remote GitHub repository is not touched.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 flex flex-col gap-3">
+            <Button
+              type="button"
+              data-testid="btn-open-reset-migration-dialog"
+              variant="destructive"
+              size="sm"
+              onClick={() => setResetDialogOpen(true)}
+            >
+              Reset Migration
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset migration</DialogTitle>
+            <DialogDescription>
+              This clears local migration state and workspace settings. Remote GitHub repository is not touched.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              Type <code>{resetToken}</code> to confirm.
+            </p>
+            <Input
+              data-testid="input-reset-confirmation"
+              type="text"
+              value={resetConfirmationInput}
+              onChange={(e) => setResetConfirmationInput(e.target.value)}
+              placeholder={resetToken}
+              className="font-mono text-sm"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setResetDialogOpen(false);
+                setResetConfirmationInput('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="btn-confirm-reset-migration"
+              onClick={() => void handleResetMigration()}
+              disabled={resetConfirmationInput.trim() !== resetToken}
+            >
+              Reset Migration
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SettingsPanelShell>
   );
 }

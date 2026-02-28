@@ -115,6 +115,15 @@ pub struct Workspace {
     pub fabric_url: Option<String>,
     pub fabric_service_principal_id: Option<String>,
     pub fabric_service_principal_secret: Option<String>,
+    pub source_type: Option<String>,
+    pub source_server: Option<String>,
+    pub source_database: Option<String>,
+    pub source_port: Option<i64>,
+    pub source_authentication_mode: Option<String>,
+    pub source_username: Option<String>,
+    pub source_password: Option<String>,
+    pub source_encrypt: Option<bool>,
+    pub source_trust_server_certificate: Option<bool>,
     pub created_at: String,
 }
 

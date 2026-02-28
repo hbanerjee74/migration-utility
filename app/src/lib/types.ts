@@ -26,6 +26,15 @@ export interface Workspace {
   fabricUrl?: string | null;
   fabricServicePrincipalId?: string | null;
   fabricServicePrincipalSecret?: string | null;
+  sourceType?: 'sql_server' | 'fabric_warehouse' | null;
+  sourceServer?: string | null;
+  sourceDatabase?: string | null;
+  sourcePort?: number | null;
+  sourceAuthenticationMode?: 'sql_password' | 'entra_service_principal' | null;
+  sourceUsername?: string | null;
+  sourcePassword?: string | null;
+  sourceEncrypt?: boolean | null;
+  sourceTrustServerCertificate?: boolean | null;
   createdAt: string;
 }
 
@@ -36,6 +45,15 @@ export interface ApplyWorkspaceArgs {
   fabricUrl?: string | null;
   fabricServicePrincipalId?: string | null;
   fabricServicePrincipalSecret?: string | null;
+  sourceType?: 'sql_server' | 'fabric_warehouse' | null;
+  sourceServer?: string | null;
+  sourceDatabase?: string | null;
+  sourcePort?: number | null;
+  sourceAuthenticationMode?: 'sql_password' | 'entra_service_principal' | null;
+  sourceUsername?: string | null;
+  sourcePassword?: string | null;
+  sourceEncrypt?: boolean | null;
+  sourceTrustServerCertificate?: boolean | null;
 }
 
 export interface AppSettings {
