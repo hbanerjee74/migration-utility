@@ -30,6 +30,33 @@ export const workspaceGet = () =>
 export const workspaceApplyAndClone = (args: ApplyWorkspaceArgs) =>
   invoke<Workspace>('workspace_apply_and_clone', { args });
 
+export const workspaceResetState = () =>
+  invoke<void>('workspace_reset_state');
+
+export const workspaceTestSourceConnection = (args: {
+  sourceType: 'sql_server' | 'fabric_warehouse';
+  sourceServer: string;
+  sourcePort: number;
+  sourceAuthenticationMode: 'sql_password' | 'entra_service_principal';
+  sourceUsername: string;
+  sourcePassword: string;
+  sourceEncrypt: boolean;
+  sourceTrustServerCertificate: boolean;
+}) =>
+  invoke<string>('workspace_test_source_connection', { args });
+
+export const workspaceDiscoverSourceDatabases = (args: {
+  sourceType: 'sql_server' | 'fabric_warehouse';
+  sourceServer: string;
+  sourcePort: number;
+  sourceAuthenticationMode: 'sql_password' | 'entra_service_principal';
+  sourceUsername: string;
+  sourcePassword: string;
+  sourceEncrypt: boolean;
+  sourceTrustServerCertificate: boolean;
+}) =>
+  invoke<string[]>('workspace_discover_source_databases', { args });
+
 export const getSettings = () =>
   invoke<AppSettings>('get_settings');
 

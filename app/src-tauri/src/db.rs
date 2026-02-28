@@ -27,6 +27,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         5,
         include_str!("../migrations/005_add_fabric_credentials.sql"),
     ),
+    (
+        6,
+        include_str!("../migrations/006_add_workspace_source_connection.sql"),
+    ),
 ];
 
 pub fn open(path: &Path) -> Result<Connection, DbError> {
@@ -154,7 +158,7 @@ mod tests {
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM schema_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(count, 5, "schema_version should have exactly 5 rows");
+        assert_eq!(count, 6, "schema_version should have exactly 6 rows");
     }
 
     #[test]
@@ -206,6 +210,34 @@ mod tests {
             )
             .unwrap();
         assert_eq!(version_4_applied, 1, "migration 4 should be recorded");
+    }
+
+    #[test]
+    fn migration_6_adds_workspace_source_columns() {
+        let conn = open_memory();
+
+        let expected = [
+            "source_type",
+            "source_server",
+            "source_database",
+            "source_port",
+            "source_authentication_mode",
+            "source_username",
+            "source_password",
+            "source_encrypt",
+            "source_trust_server_certificate",
+        ];
+
+        for column in expected {
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('workspaces') WHERE name=?1",
+                    [column],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "column '{column}' missing");
+        }
     }
 
     #[test]

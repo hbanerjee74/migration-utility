@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 import ConnectionsTab from './connections-tab';
 import WorkspaceTab from './workspace-tab';
 import ProfileTab from './profile-tab';
-import ResetTab from './reset-tab';
 import UsageTab from './usage-tab';
 
 interface SubTab {
@@ -17,7 +16,6 @@ const TABS: SubTab[] = [
   { label: 'Connections', path: '/settings',           testId: 'settings-tab-connections' },
   { label: 'Workspace',   path: '/settings/workspace', testId: 'settings-tab-workspace' },
   { label: 'Profile',     path: '/settings/profile',   testId: 'settings-tab-profile' },
-  { label: 'Reset',       path: '/settings/reset',     testId: 'settings-tab-reset' },
   { label: 'Usage',       path: '/settings/usage',     testId: 'settings-tab-usage' },
 ];
 
@@ -114,7 +112,6 @@ export default function SettingsSurface() {
           <Route index element={<ConnectionsTab />} />
           <Route path="workspace" element={<WorkspaceTab />} />
           <Route path="profile" element={<ProfileTab />} />
-          <Route path="reset" element={<ResetTab />} />
           <Route path="usage" element={<UsageTab />} />
         </Routes>
       </div>
