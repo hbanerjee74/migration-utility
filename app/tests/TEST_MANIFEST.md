@@ -28,6 +28,7 @@ Maps source files to tests. Update when adding new Rust commands or E2E specs.
 | File | Tag | What it covers |
 |---|---|---|
 | `e2e/workspace/workspace.spec.ts` | `@workspace` | Workspace setup form, submit, resume, mock data |
+| `e2e/home/home.spec.ts` | `@home` | Setup/dashboard/running states, nav CTAs, root redirect |
 
 ## Shared Infrastructure
 

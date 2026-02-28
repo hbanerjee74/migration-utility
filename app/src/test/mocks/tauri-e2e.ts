@@ -8,6 +8,8 @@
 
 const mockResponses: Record<string, unknown> = {
   // Workspace
+  workspace_get: null,
+  workspace_create: undefined,
   get_workspaces: [],
   create_workspace: undefined,
   delete_workspace: undefined,
