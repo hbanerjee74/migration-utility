@@ -12,12 +12,9 @@ Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fab
 | Frontend | React 19, TypeScript strict, Vite |
 | Styling | Tailwind CSS 4, shadcn/ui |
 | State | Zustand |
-| Routing | TanStack Router |
 | Icons | Lucide React |
 | Agent sidecar | Bun + `@anthropic-ai/claude-agent-sdk` |
 | Database | SQLite (`rusqlite` bundled) |
-| Git operations | `git2` |
-| HTTP (Fabric API) | `reqwest` |
 | Rust errors | `thiserror` |
 | Orchestrator | Python + Claude Agent SDK (`uv` for deps) |
 | dbt integration | dbt-core-mcp (MCP server) |
@@ -30,22 +27,12 @@ Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fab
 
 ```bash
 # Tauri app (run from app/)
-cd app && npm install && npm run sidecar:build
 npm run dev                    # Dev mode (hot reload)
 npm run build                  # Production build
 
-# Frontend tests (run from app/)
-npm run test                   # All Vitest tests
-npm run test:unit              # Stores + lib tests only
-npm run test:integration       # Component + page tests
-npm run test:e2e               # All Playwright E2E tests
-npm run test:e2e:workspace     # E2E filtered to @workspace tag
-npm run test:changed           # Changed files only (vitest --changed)
-npm run test:all               # Full suite (Vitest + Playwright)
-
 # Rust tests
-cargo test --manifest-path app/src-tauri/Cargo.toml              # all Rust tests
-cargo test --manifest-path app/src-tauri/Cargo.toml commands::workspace  # module filter
+cargo test --manifest-path app/src-tauri/Cargo.toml   # all Rust tests
+cargo test --manifest-path app/src-tauri/Cargo.toml db # module filter
 
 # Sidecar tests (run from app/sidecar/)
 npx vitest run
@@ -62,8 +49,8 @@ uv run pytest tests/unit       # Unit tests only
 
 **Tauri app:**
 
-1. New state logic (store actions, derived state) → store unit tests
-2. New Rust command with testable logic → `#[cfg(test)]` tests
+1. New Rust command with testable logic → `#[cfg(test)]` tests
+2. New state logic (store actions, derived state) → store unit tests (once stores exist)
 3. New UI interaction → component test
 4. New page or major flow → E2E test (happy path)
 5. Bug fix → regression test
@@ -91,21 +78,12 @@ Determine what you changed, then pick the right runner:
 
 | What changed | Tests to run |
 |---|---|
-| Frontend store / hook | `npm run test:unit` |
-| Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
-| Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
+| Rust command or `db.rs` | `cargo test --manifest-path app/src-tauri/Cargo.toml <module>` |
 | Bun sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
 | Python orchestrator / agents | `cd orchestrator && uv run pytest <module>` |
-| Shared infrastructure (test mocks, setup, tauri.ts) | `npm run test:all` |
-| Unsure | `npm run test:all` (app) + `cd orchestrator && uv run pytest` |
+| Unsure | all of the above |
 
 Run `npx tsc --noEmit` from `app/` first — catches type errors in files you didn't directly touch.
-
-### Updating the test manifest
-
-Update `app/tests/TEST_MANIFEST.md` when adding new Rust commands (add cargo filter + E2E tag),
-new E2E spec files, or changing shared infrastructure. Frontend test mappings are handled
-automatically by `vitest --changed` and naming conventions.
 
 ## Design Docs
 
@@ -121,10 +99,9 @@ sentence beats a paragraph. Avoid restating what the code already makes obvious.
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
 - TypeScript strict mode, no `any`
-- Zustand stores: one file per store in `app/src/stores/`
-- Rust commands: one module per concern in `app/src-tauri/src/commands/`
-- Tailwind 4 + shadcn/ui for all UI — see `.claude/rules/frontend-design.md` (auto-loaded in `app/src/`)
-- **Error colors:** Always use `text-destructive` for error text — never hardcoded `text-red-*`
+- Zustand stores: one file per store in `app/src/stores/` (planned — not yet created)
+- Rust commands: one module per concern in `app/src-tauri/src/commands/` (planned — not yet created)
+- Tailwind 4 + shadcn/ui for all UI — rules in `.claude/rules/frontend-design.md`
 - Verify before committing: `cd app && npx tsc --noEmit` (frontend) + `cargo check --manifest-path app/src-tauri/Cargo.toml` (backend)
 
 ## Issue Management
@@ -153,16 +130,6 @@ Every new feature must include logging. Use `logging` module (Python), `log` cra
 | **warn** | Unexpected but recoverable |
 | **info** | Key lifecycle events (command invoked, agent started, plan state changed) |
 | **debug** | Internal details useful only when troubleshooting |
-
-## UI Constraints
-
-These rules are enforced by the design but easy to miss during implementation:
-
-- **Scope locks after launch:** All three Scope steps (Select, Candidacy, Table Config) become read-only once a migration run is launched. Show an amber banner; disable all form fields. The surface remains navigable.
-- **Workspace tab locks after launch:** Fabric URL, migration repo, and working directory fields are `disabled` once a run is active. Connections tab (GitHub, API key) stays editable.
-- **Wizard forward navigation:** Blocked only when required state is missing. Validate inline — never block with a modal. Backward navigation is always free.
-- **Candidacy override reason is required:** The override reason field must be non-empty before the override Sheet can save. Call `candidacy_override` command on explicit save, not debounced.
-- **PII confirmation is explicit:** "Confirm table" in Table Config must be clicked before launch is allowed — auto-populated PII fields do not count as confirmed.
 
 ## Gotchas
 

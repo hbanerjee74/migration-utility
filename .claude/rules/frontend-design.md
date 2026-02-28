@@ -7,15 +7,16 @@ paths:
 
 ## Colors — no raw Tailwind color classes
 
-**Never** use Tailwind color classes like `text-green-500`, `bg-blue-400`, `text-yellow-600`, `text-red-500`. All semantic colors use AD brand CSS variables defined in `app/src/styles/globals.css` (auto-switch light/dark):
+Use AD brand CSS variables defined in `app/src/styles/globals.css` (auto-switch light/dark). Never
+hardcode hex values or raw Tailwind palette classes (`text-green-500`, `bg-blue-400`, etc.).
 
 | Semantic | How to use | Examples |
 |---|---|---|
 | Success/completed | `style={{ color: "var(--color-seafoam)" }}` | Check icons, completed states, "Saved" |
 | Primary/action/info | `style={{ color: "var(--color-pacific)" }}` | CTAs, active states, progress, links |
 | Secondary/depth | `style={{ color: "var(--color-ocean)" }}` | Secondary accents |
-| Warning | `text-amber-600 dark:text-amber-400` | Only exception — amber IS the AD warning color |
-| Error/destructive | `text-destructive` / `bg-destructive` | Already themed via CSS variable |
+| Warning | `text-amber-600 dark:text-amber-400` | AD warning color — no CSS variable exists for amber |
+| Error/destructive | `text-destructive` / `bg-destructive` | Themed via CSS variable |
 | Text | `text-foreground` / `text-muted-foreground` | Body text, labels |
 | Backgrounds | `bg-muted`, `bg-card`, `bg-background` | Themed surfaces |
 | Tinted backgrounds | `color-mix(in oklch, var(--color-pacific), transparent 85%)` | Section bands, badges, highlights |
