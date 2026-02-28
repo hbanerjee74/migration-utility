@@ -6,6 +6,13 @@ import ScopeSelection from './routes/scope-selection';
 import CandidacyReview from './routes/candidacy-review';
 import TableConfig from './routes/table-config';
 import ReviewLaunch from './routes/review-launch';
+import { useWorkflowStore, STEP_ROUTES } from './stores/workflow-store';
+
+// Redirects to wherever the user last left off (persisted across restarts).
+function RootRedirect() {
+  const currentStep = useWorkflowStore((s) => s.currentStep);
+  return <Navigate to={STEP_ROUTES[currentStep]} replace />;
+}
 
 export default function App() {
   return (
@@ -15,7 +22,7 @@ export default function App() {
           <StepperNav />
           <main className="flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<Navigate to="/workspace" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/workspace" element={<WorkspaceSetup />} />
               <Route path="/scope" element={<ScopeSelection />} />
               <Route path="/candidacy" element={<CandidacyReview />} />

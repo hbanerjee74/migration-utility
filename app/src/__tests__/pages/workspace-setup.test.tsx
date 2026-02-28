@@ -32,15 +32,15 @@ describe('WorkspaceSetup', () => {
     mockInvokeCommand('workspace_get', null);
   });
 
-  it('shows validation errors when submitting empty form', async () => {
+  it('shows validation errors when submitting with empty form via Apply', async () => {
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByTestId('btn-submit'));
+    await user.click(screen.getByTestId('btn-apply'));
     expect(await screen.findByText('Workspace name is required')).toBeInTheDocument();
     expect(screen.getByText('Migration repo path is required')).toBeInTheDocument();
   });
 
-  it('calls workspace_create and navigates to /scope on valid submit', async () => {
+  it('Apply creates workspace and navigates to /scope', async () => {
     const user = userEvent.setup();
     const ws = makeWorkspace({ id: 'ws-new', displayName: 'Test WS' });
     mockInvokeCommand('workspace_create', ws);
@@ -48,15 +48,35 @@ describe('WorkspaceSetup', () => {
 
     await user.type(screen.getByTestId('input-workspace-name'), 'Test WS');
     await user.type(screen.getByTestId('input-repo-path'), '/tmp/repo');
-    await user.click(screen.getByTestId('btn-submit'));
+    await user.click(screen.getByTestId('btn-apply'));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/scope'));
   });
 
-  it('redirects to /scope when workspace already exists', async () => {
-    mockInvokeCommand('workspace_get', makeWorkspace());
+  it('Save creates workspace and stays on the page', async () => {
+    const user = userEvent.setup();
+    const ws = makeWorkspace({ id: 'ws-new', displayName: 'Test WS' });
+    mockInvokeCommand('workspace_create', ws);
     renderPage();
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/scope'));
+
+    await user.type(screen.getByTestId('input-workspace-name'), 'Test WS');
+    await user.type(screen.getByTestId('input-repo-path'), '/tmp/repo');
+    await user.click(screen.getByTestId('btn-save'));
+
+    // Should NOT navigate away
+    await waitFor(() => expect(mockNavigate).not.toHaveBeenCalled());
+  });
+
+  it('loads existing workspace data into form without navigating', async () => {
+    const ws = makeWorkspace({ displayName: 'Existing WS', migrationRepoPath: '/existing/path' });
+    mockInvokeCommand('workspace_get', ws);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('input-workspace-name')).toHaveValue('Existing WS');
+      expect(screen.getByTestId('input-repo-path')).toHaveValue('/existing/path');
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('browse button calls dialog open and sets repo path', async () => {

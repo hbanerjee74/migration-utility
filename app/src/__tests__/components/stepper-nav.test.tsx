@@ -19,7 +19,15 @@ function renderNav() {
 describe('StepperNav', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
-    useWorkflowStore.setState({ currentStep: 'workspace', completedSteps: [], workspaceId: null, selectedTableIds: [] });
+    useWorkflowStore.setState((s) => ({
+      ...s,
+      currentStep: 'workspace',
+      completedSteps: [],
+      stepStatus: {},
+      stepSavedAt: {},
+      workspaceId: null,
+      selectedTableIds: [],
+    }));
   });
 
   it('renders all 5 steps', () => {
@@ -31,18 +39,25 @@ describe('StepperNav', () => {
     expect(screen.getByTestId('step-launch')).toBeInTheDocument();
   });
 
-  it('clicking a completed step navigates to it', async () => {
-    useWorkflowStore.setState({ currentStep: 'scope', completedSteps: ['workspace'] });
+  it('clicking any step navigates to it', async () => {
+    renderNav();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('step-scope'));
+    expect(mockNavigate).toHaveBeenCalledWith('/scope');
+  });
+
+  it('clicking the active step still navigates to it', async () => {
     renderNav();
     const user = userEvent.setup();
     await user.click(screen.getByTestId('step-workspace'));
     expect(mockNavigate).toHaveBeenCalledWith('/workspace');
   });
 
-  it('clicking the active step does not navigate', async () => {
+  it('clicking a step without completing previous steps navigates to it', async () => {
+    useWorkflowStore.setState((s) => ({ ...s, currentStep: 'workspace', completedSteps: [] }));
     renderNav();
     const user = userEvent.setup();
-    await user.click(screen.getByTestId('step-workspace'));
-    expect(mockNavigate).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('step-launch'));
+    expect(mockNavigate).toHaveBeenCalledWith('/launch');
   });
 });

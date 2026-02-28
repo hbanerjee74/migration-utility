@@ -6,6 +6,7 @@ import { useWorkflowStore } from '../stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import StepActions from '@/components/step-actions';
 
 interface Workspace {
   id: string;
@@ -17,25 +18,28 @@ interface Workspace {
 
 export default function WorkspaceSetup() {
   const navigate = useNavigate();
-  const { setWorkspaceId, advanceTo, markComplete } = useWorkflowStore();
+  const { setWorkspaceId, saveStep, applyStep, advanceTo } = useWorkflowStore();
 
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [fabricUrl, setFabricUrl] = useState('');
   const [errors, setErrors] = useState<{ name?: string; repoPath?: string }>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
+  const [existingId, setExistingId] = useState<string | null>(null);
 
-  // On load: if workspace already exists, resume at last step
+  // On load: populate form with any saved workspace (don't auto-navigate away).
   useEffect(() => {
     invoke<Workspace | null>('workspace_get').then((ws) => {
       if (ws) {
+        setExistingId(ws.id);
         setWorkspaceId(ws.id);
-        markComplete('workspace');
-        advanceTo('scope');
-        navigate('/scope');
+        setName(ws.displayName);
+        setRepoPath(ws.migrationRepoPath);
+        setFabricUrl(ws.fabricUrl ?? '');
       }
     }).catch((e) => console.error('workspace_get failed', e));
   }, []);
@@ -53,28 +57,58 @@ export default function WorkspaceSetup() {
     return Object.keys(errs).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Persist to SQLite (creates workspace if not yet created). Stays on the page.
+  async function handleSave() {
     if (!validate()) return;
-    setSubmitting(true);
-    setSubmitError(null);
+    setSaving(true);
+    setActionError(null);
     try {
-      const ws = await invoke<Workspace>('workspace_create', {
-        args: {
-          name: name.trim(),
-          migrationRepoPath: repoPath.trim(),
-          fabricUrl: fabricUrl.trim() || null,
-        },
-      });
-      setWorkspaceId(ws.id);
-      markComplete('workspace');
+      if (!existingId) {
+        const ws = await invoke<Workspace>('workspace_create', {
+          args: {
+            name: name.trim(),
+            migrationRepoPath: repoPath.trim(),
+            fabricUrl: fabricUrl.trim() || null,
+          },
+        });
+        setExistingId(ws.id);
+        setWorkspaceId(ws.id);
+      }
+      saveStep('workspace');
+      console.log('workspace: saved');
+    } catch (err) {
+      console.error('workspace_create failed', err);
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Persist to SQLite then advance to the next step.
+  async function handleApply() {
+    if (!validate()) return;
+    setApplying(true);
+    setActionError(null);
+    try {
+      if (!existingId) {
+        const ws = await invoke<Workspace>('workspace_create', {
+          args: {
+            name: name.trim(),
+            migrationRepoPath: repoPath.trim(),
+            fabricUrl: fabricUrl.trim() || null,
+          },
+        });
+        setExistingId(ws.id);
+        setWorkspaceId(ws.id);
+      }
+      applyStep('workspace');
       advanceTo('scope');
       navigate('/scope');
     } catch (err) {
       console.error('workspace_create failed', err);
-      setSubmitError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
-      setSubmitting(false);
+      setApplying(false);
     }
   }
 
@@ -85,8 +119,12 @@ export default function WorkspaceSetup() {
       await invoke('seed_mock_data');
       const ws = await invoke<Workspace | null>('workspace_get');
       if (ws) {
+        setExistingId(ws.id);
         setWorkspaceId(ws.id);
-        markComplete('workspace');
+        setName(ws.displayName);
+        setRepoPath(ws.migrationRepoPath);
+        setFabricUrl(ws.fabricUrl ?? '');
+        applyStep('workspace');
         advanceTo('scope');
         navigate('/scope');
       }
@@ -105,7 +143,7 @@ export default function WorkspaceSetup() {
         Configure your migration workspace to get started.
       </p>
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <Label htmlFor="workspace-name">
             Workspace name <span className="text-destructive">*</span>
@@ -165,18 +203,18 @@ export default function WorkspaceSetup() {
           />
         </div>
 
-        {submitError && (
-          <p className="text-xs text-destructive" role="alert">{submitError}</p>
+        {actionError && (
+          <p className="text-xs text-destructive" role="alert">{actionError}</p>
         )}
 
-        <Button
-          type="submit"
-          data-testid="btn-submit"
-          disabled={submitting}
-        >
-          {submitting ? 'Saving…' : 'Continue'}
-        </Button>
-      </form>
+        <StepActions
+          onSave={handleSave}
+          onApply={handleApply}
+          isSaving={saving}
+          isApplying={applying}
+          applyLabel="Apply & Continue"
+        />
+      </div>
 
       {import.meta.env.DEV && (
         <div className="mt-8 pt-6 border-t border-dashed">
