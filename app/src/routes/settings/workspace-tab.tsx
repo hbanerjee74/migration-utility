@@ -320,7 +320,7 @@ export default function WorkspaceTab() {
                   value={repoPath}
                   onChange={(e) => setRepoPath(e.target.value)}
                   className="flex-1"
-                  placeholder="/path/to/local-clone"
+                  placeholder="~/vibedata-migration"
                   disabled={isLocked}
                 />
                 <Button
@@ -339,7 +339,7 @@ export default function WorkspaceTab() {
                 </p>
               ) : null}
               <p className="text-sm text-muted-foreground">
-                Default: <code>~/migration-utility</code>. Changeable when no migration is active.
+                Default: <code>~/vibedata-migration</code>. Changeable when no migration is active.
               </p>
             </div>
           </CardContent>

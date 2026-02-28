@@ -46,7 +46,7 @@ Then open **Settings → Workspace** and configure the current migration:
 
 - **Fabric workspace URL** and service principal credentials — the source workspace containing the stored procedures to migrate
 - **Migration repo** — the GitHub repo where migration state and agent outputs are committed (separate from your production repo)
-- **Working directory** — where the migration repo is cloned locally (default: `~/migration-utility`)
+- **Working directory** — where the migration repo is cloned locally (default: `~/vibedata-migration`)
 
 Once Connections and Workspace are both configured, **Home** shows you're ready to begin.
 
