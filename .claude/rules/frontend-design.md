@@ -54,6 +54,85 @@ Cards use `shadow-sm` with `hover:shadow`. No heavy drop shadows. Dark mode pref
 
 Use `duration-150` (150ms) for micro interactions (hover, toggle). `duration-200` for standard transitions (expand/collapse). Easing: default ease-out.
 
+## State Indicators
+
+Every pipeline/agent state maps to a fixed colour + icon combination. Never invent new state colours.
+
+| State | Colour | Icon | Badge background |
+|---|---|---|---|
+| Completed | `var(--color-seafoam)` | `CheckCircle2` | `color-mix(in oklch, var(--color-seafoam), transparent 85%)` |
+| Running | `var(--color-pacific)` | `Loader2 animate-spin` | `color-mix(in oklch, var(--color-pacific), transparent 85%)` |
+| Pending | `text-muted-foreground` | `Circle` or `Clock` | `bg-muted` |
+| Failed | `text-destructive` | `XCircle` | `bg-destructive/15` |
+| Blocked | `text-amber-600 dark:text-amber-400` | `AlertTriangle` | `bg-amber-100 dark:bg-amber-900/30` |
+
+Candidacy tier badges follow the same mapping — Migrate = running colours, Review = warning colours, Reject = error colours.
+
+All badges: `rounded-full text-xs font-medium px-2 py-0.5`.
+
+## Icons
+
+Use **Lucide React** (`lucide-react`) exclusively. Never install a second icon library.
+
+| Icon | Semantic | Where used |
+|---|---|---|
+| `CheckCircle2` | Complete / confirmed | Stepper complete, table confirmed, phase complete |
+| `Circle` | Pending (no time reference) | Stepper pending |
+| `Clock` | Pending (time-aware) | Agent phase not yet started |
+| `ChevronRight` | Active step indicator | Stepper active |
+| `Loader2` + `animate-spin` | Running | Agent phases, async loading |
+| `XCircle` | Failed | Agent phase failed |
+| `AlertTriangle` | Blocked / warning | BLOCKED procedures, recoverable warnings |
+| `Pencil` | User override | Candidacy OVR column, FDE-edited fields |
+| `ChevronDown` | Row expansion | Collapsible trigger |
+| `Wand2` | AI origin (optional label decoration) | AI-suggested field indicator |
+
+Icon colours follow the state indicator table above. Apply via `style={{ color: "var(...)" }}` or a Tailwind color class matching the state rules.
+
+## AI-Suggested Fields
+
+Fields pre-populated by an agent get a **2px pacific left border** to signal AI origin. When the FDE edits the field, remove the border — the field is now FDE-owned.
+
+```tsx
+// Wrapper when field is AI-suggested
+<div style={{ borderLeft: "2px solid var(--color-pacific)", paddingLeft: "8px" }}>
+  <label className="text-xs text-muted-foreground">
+    Incremental column
+    <Wand2 className="inline ml-1 w-3 h-3 text-muted-foreground" /> {/* optional */}
+  </label>
+  <Combobox ... />
+</div>
+
+// Wrapper after FDE edits — border removed
+<div style={{ paddingLeft: "10px" }}>
+  ...
+</div>
+```
+
+Apply to: `table_type`, `load_strategy`, `snapshot_strategy`, `incremental_column`, `date_column`, `pii_columns` in Table Config — any field the candidacy agent pre-populates.
+
+## Components (shadcn/ui)
+
+Install from shadcn/ui only. Do not bring in other component libraries.
+
+| Component | Use in this project |
+|---|---|
+| `Table`, `TableRow`, `TableCell` | Scope selection, candidacy review, launch monitor |
+| `Checkbox` | Per-row and group select-all in Scope |
+| `Input` | Search fields, text inputs |
+| `Select` | Filter dropdowns, field pickers |
+| `Button` | All CTAs and actions |
+| `Badge` | State chips, tier indicators |
+| `Card`, `Separator` | Form section containers |
+| `Sheet` | Right-sliding drawer — candidacy override, detail panels |
+| `RadioGroup` | Tier picker inside Sheet |
+| `Textarea` | Override reason, free-text inputs |
+| `ResizablePanelGroup`, `ResizablePanel` | Master-detail split (Table Config) |
+| `Combobox` | Searchable column name pickers |
+| `ScrollArea` | Scrollable lists, log streams |
+| `Progress` | Overall completion bar (Monitor) |
+| `Collapsible` | Expandable phase groups, run history (Monitor, Usage) |
+
 ## Logging
 
 - `console.error()` for caught errors
