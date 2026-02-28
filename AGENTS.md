@@ -98,16 +98,62 @@ sentence beats a paragraph. Avoid restating what the code already makes obvious.
 
 - Granular commits: one concern per commit, run tests before each
 - Stage specific files — use `git add <file>` not `git add .`
-- TypeScript strict mode, no `any`
-- Zustand stores: one file per store in `app/src/stores/` (planned — not yet created)
-- Rust commands: one module per concern in `app/src-tauri/src/commands/` (planned — not yet created)
-- Tailwind 4 + shadcn/ui for all UI — rules in `.claude/rules/frontend-design.md`
-- Verify before committing: `cd app && npx tsc --noEmit` (frontend) + `cargo check --manifest-path app/src-tauri/Cargo.toml` (backend)
+- All `.md` files must pass `markdownlint` before committing (`markdownlint <file>`)
+- Verify before committing: `cd app && npx tsc --noEmit` + `cargo check --manifest-path app/src-tauri/Cargo.toml`
+
+### Naming conventions
+
+**TypeScript** (`app/src/`): files `kebab-case`, components `PascalCase`, functions/variables `camelCase`, constants `UPPER_SNAKE_CASE`. Strict mode, no `any`.
+
+**Python** (`orchestrator/`): files `snake_case`, classes `PascalCase`, functions/variables `snake_case`, constants `UPPER_SNAKE_CASE`. Type annotations required on all function signatures. Use `pathlib.Path`, not `os.path`. Never bare `except:`.
+
+**Rust** (`app/src-tauri/`): standard Rust conventions enforced by `clippy`. Use `thiserror` for error types; propagate with `?`.
+
+### Frontend (`app/src/`)
+
+Use AD brand CSS variables — never raw Tailwind palette classes (`text-green-500`, `bg-blue-400`, etc.):
+
+| Semantic | Usage |
+|---|---|
+| Primary / active | `style={{ color: "var(--color-pacific)" }}` |
+| Success / complete | `style={{ color: "var(--color-seafoam)" }}` |
+| Warning | `text-amber-600 dark:text-amber-400` (no CSS variable for amber) |
+| Error | `text-destructive` — never `text-red-*` |
+| Tinted background | `color-mix(in oklch, var(--color-pacific), transparent 85%)` |
+
+Fonts: Inter Variable (sans) + JetBrains Mono Variable (mono) — never introduce other fonts.
+
+State indicators use fixed icon + colour combinations. Install components from **shadcn/ui only** — no other component libraries. Use **Lucide React** for icons — no other icon library.
+
+Zustand stores: one file per store in `app/src/stores/` (planned). Full rules: `.claude/rules/frontend-design.md`, `.claude/rules/ui-flows.md`.
+
+### Rust backend (`app/src-tauri/`)
+
+Every `#[tauri::command]` must:
+
+- Log `info!` on entry with key params: `info!("command_name: key={}", val)`
+- Log `error!` on failure: `error!("command_name: failed: {}", e)`
+- Return `Result<T, CommandError>` where `CommandError` derives `serde::Serialize`
+
+Commands: one module per concern in `src/commands/` (planned). Full rules: `.claude/rules/rust-backend.md`.
+
+### Sidecar (`app/sidecar/`)
+
+Communicates with Rust via **JSONL on stdin/stdout** — never write anything to stdout except protocol messages. Log to **stderr** only. Rebuild after edits: `npm run sidecar:build`. Full rules: `.claude/rules/agent-sidecar.md`.
+
+### Error handling
+
+Validate at system boundaries only (Fabric API responses, ADF JSON, dbt-core-mcp results, `plan.md` reads) — trust internal guarantees elsewhere.
+
+- **Python:** raise typed exceptions, never swallow silently
+- **TypeScript:** surface typed Tauri errors to the user via error state
+- **Agent tools:** log the error and mark the affected model `BLOCKED` in `plan.md` — don't crash the orchestrator
 
 ## Issue Management
 
 - **PR title format:** `VU-XXX: short description`
 - **PR body link:** `Fixes VU-XXX`
+- **Worktrees:** `../worktrees/<branchName>` relative to repo root. Full rules: `.claude/rules/git-workflow.md`.
 
 ## Skills
 
