@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod logging;
 mod types;
 
 use std::sync::Mutex;
@@ -7,9 +8,11 @@ use std::sync::Mutex;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(logging::build_log_plugin().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            logging::truncate_log_file(app.handle());
             use tauri::Manager;
             let db_path = app
                 .path()
@@ -24,6 +27,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app_info::set_log_level,
+            commands::app_info::get_log_file_path,
+            commands::app_info::get_data_dir_path,
             commands::workspace::workspace_create,
             commands::workspace::workspace_get,
             commands::fabric::fabric_upsert_items,

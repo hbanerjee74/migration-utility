@@ -1,0 +1,51 @@
+use tauri_plugin_log::{Target, TargetKind};
+
+const LOG_FILE_NAME: &str = "migration-utility";
+
+/// Build the log plugin with dual targets: log file + stderr.
+pub fn build_log_plugin() -> tauri_plugin_log::Builder {
+    tauri_plugin_log::Builder::new()
+        .targets([
+            Target::new(TargetKind::LogDir {
+                file_name: Some(LOG_FILE_NAME.into()),
+            }),
+            Target::new(TargetKind::Stderr),
+        ])
+        .level(log::LevelFilter::Debug)
+        .max_file_size(50_000_000)
+}
+
+/// Truncate the log file at session start so each run gets a clean slate.
+pub fn truncate_log_file(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Ok(log_dir) = app.path().app_log_dir() {
+        let log_file = log_dir.join(format!("{}.log", LOG_FILE_NAME));
+        if log_file.exists() {
+            let _ = std::fs::write(&log_file, "");
+        }
+    }
+}
+
+/// Set the global Rust log level at runtime (survives until next call or restart).
+pub fn set_log_level(level: &str) {
+    let filter = match level.to_lowercase().as_str() {
+        "error" => log::LevelFilter::Error,
+        "warn" => log::LevelFilter::Warn,
+        "info" => log::LevelFilter::Info,
+        "debug" => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Info,
+    };
+    log::set_max_level(filter);
+    log::info!("Log level set to {}", filter);
+}
+
+/// Return the absolute path to the app log file.
+pub fn get_log_file_path(app: &tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    let log_file = log_dir.join(format!("{}.log", LOG_FILE_NAME));
+    log_file
+        .to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Log file path contains invalid UTF-8".to_string())
+}

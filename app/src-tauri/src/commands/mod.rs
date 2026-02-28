@@ -1,3 +1,4 @@
+pub mod app_info;
 pub mod fabric;
 pub mod github_auth;
 pub mod migration;
