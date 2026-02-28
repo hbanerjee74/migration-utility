@@ -12,6 +12,7 @@ import {
 import { githubStartDeviceFlow, githubPollForToken } from '@/lib/tauri';
 import type { DeviceFlowResponse } from '@/lib/types';
 import { useAuthStore } from '@/stores/auth-store';
+import { logger } from '@/lib/logger';
 
 interface GitHubLoginDialogProps {
   open: boolean;
@@ -50,6 +51,7 @@ export function GitHubLoginDialog({ open, onOpenChange }: GitHubLoginDialogProps
 
   const startDeviceFlow = useCallback(async () => {
     setState({ step: 'loading' });
+    logger.info('github: starting device flow');
     try {
       const device = await githubStartDeviceFlow();
       deviceRef.current = device;
@@ -58,8 +60,10 @@ export function GitHubLoginDialog({ open, onOpenChange }: GitHubLoginDialogProps
         setState({ step: 'code', device, copied: false, opened: false });
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('github: device flow failed', message);
       if (mountedRef.current) {
-        setState({ step: 'error', message: err instanceof Error ? err.message : String(err) });
+        setState({ step: 'error', message });
       }
     }
   }, []);
@@ -106,6 +110,7 @@ export function GitHubLoginDialog({ open, onOpenChange }: GitHubLoginDialogProps
           intervalRef.current += 5;
           pollingRef.current = setTimeout(poll, intervalRef.current * 1000);
         } else if (result.status === 'success') {
+          logger.info(`github: signed in as ${result.user.login}`);
           useAuthStore.getState().setUser(result.user);
           setState({ step: 'success', login: result.user.login });
           successTimeoutRef.current = setTimeout(() => {
@@ -113,8 +118,10 @@ export function GitHubLoginDialog({ open, onOpenChange }: GitHubLoginDialogProps
           }, 1500);
         }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error('github: polling failed', message);
         if (mountedRef.current) {
-          setState({ step: 'error', message: err instanceof Error ? err.message : String(err) });
+          setState({ step: 'error', message });
         }
       }
     };
