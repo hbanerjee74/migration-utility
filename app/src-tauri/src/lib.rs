@@ -39,6 +39,10 @@ pub fn run() {
             commands::migration::migration_save_table_config,
             commands::migration::migration_get_table_config,
             commands::plan::plan_serialize,
+            commands::github_auth::github_start_device_flow,
+            commands::github_auth::github_poll_for_token,
+            commands::github_auth::github_get_user,
+            commands::github_auth::github_logout,
             #[cfg(debug_assertions)]
             commands::seed::seed_mock_data,
         ])

@@ -1,4 +1,5 @@
 pub mod fabric;
+pub mod github_auth;
 pub mod migration;
 pub mod plan;
 pub mod workspace;
