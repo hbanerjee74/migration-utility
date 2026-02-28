@@ -9,7 +9,7 @@ function SetupState() {
   const navigate = useNavigate();
   return (
     <div
-      className="flex flex-col items-center justify-center h-full gap-4"
+      className="flex-1 flex flex-col items-center justify-center gap-[14px]"
       data-testid="home-setup-state"
     >
       <div
@@ -50,6 +50,7 @@ function DashboardState() {
   const isRunning = migrationStatus === 'running';
 
   return (
+    <div className="flex-1 overflow-auto">
     <div className="p-6 flex flex-col gap-5 max-w-2xl" data-testid="home-dashboard-state">
 
       {/* Active Migration card */}
@@ -180,6 +181,7 @@ function DashboardState() {
         </div>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -189,10 +191,8 @@ export default function HomeSurface() {
   const { workspaceId } = useWorkflowStore();
 
   return (
-    <div className="h-full overflow-auto flex flex-col">
-      {!workspaceId
-        ? <div className="flex-1 flex"><SetupState /></div>
-        : <DashboardState />}
+    <div className="h-full flex flex-col">
+      {!workspaceId ? <SetupState /> : <DashboardState />}
     </div>
   );
 }

@@ -75,7 +75,7 @@ function AgentPhasesGrid() {
 function ReadyState({ onLaunch }: { onLaunch: () => void }) {
   return (
     <div
-      className="flex flex-col items-center justify-center h-full gap-4"
+      className="flex-1 flex flex-col items-center justify-center gap-[14px]"
       data-testid="monitor-ready-state"
     >
       <div
@@ -113,6 +113,7 @@ function ReadyState({ onLaunch }: { onLaunch: () => void }) {
 
 function RunningState() {
   return (
+    <div className="flex-1 overflow-auto">
     <div className="p-8 flex flex-col gap-6 max-w-4xl" data-testid="monitor-running-state">
       {/* Migration Run summary */}
       <div>
@@ -154,6 +155,7 @@ function RunningState() {
         </div>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -168,9 +170,9 @@ export default function MonitorSurface() {
   }
 
   return (
-    <div className="h-full overflow-auto flex flex-col">
+    <div className="h-full flex flex-col">
       {migrationStatus === 'idle' || migrationStatus === 'complete'
-        ? <div className="flex-1 flex"><ReadyState onLaunch={handleLaunch} /></div>
+        ? <ReadyState onLaunch={handleLaunch} />
         : <RunningState />}
     </div>
   );
