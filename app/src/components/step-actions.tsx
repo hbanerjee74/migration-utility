@@ -1,57 +1,77 @@
-import { Save, Play, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { type AutosaveStatus } from '@/hooks/use-autosave';
 
 interface StepActionsProps {
-  onSave?: () => void | Promise<void>;
   onApply: () => void | Promise<void>;
-  isSaving?: boolean;
   isApplying?: boolean;
-  saveLabel?: string;
   applyLabel?: string;
   canApply?: boolean;
+  /** Passed from useAutosave to show "Saved X ago" in the footer. */
+  autosaveStatus?: AutosaveStatus;
+  autosaveSavedAt?: string;
+}
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 export default function StepActions({
-  onSave,
   onApply,
-  isSaving = false,
   isApplying = false,
-  saveLabel = 'Save',
   applyLabel = 'Apply',
   canApply = true,
+  autosaveStatus,
+  autosaveSavedAt,
 }: StepActionsProps) {
-  const busy = isSaving || isApplying;
+  // Flash "Applied" for 2 s after isApplying transitions true → false.
+  const [justApplied, setJustApplied] = useState(false);
+  const prevApplyingRef = useRef(false);
+
+  useEffect(() => {
+    if (prevApplyingRef.current && !isApplying) {
+      setJustApplied(true);
+      const t = setTimeout(() => setJustApplied(false), 2000);
+      return () => clearTimeout(t);
+    }
+    prevApplyingRef.current = isApplying;
+  }, [isApplying]);
 
   return (
-    <div className="flex items-center gap-2 pt-4 border-t border-border mt-6">
-      {onSave && (
-        <Button
-          type="button"
-          data-testid="btn-save"
-          variant="outline"
-          onClick={onSave}
-          disabled={busy}
-        >
-          {isSaving ? (
-            <Loader2 size={14} className="mr-1.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Save size={14} className="mr-1.5" aria-hidden="true" />
-          )}
-          {isSaving ? 'Saving…' : saveLabel}
-        </Button>
-      )}
+    <div className="flex items-center justify-between pt-6 border-t border-border mt-6">
+      {/* Left: autosave status */}
+      <span className="text-xs text-muted-foreground">
+        {autosaveStatus === 'saving' && 'Saving…'}
+        {autosaveStatus === 'saved' && autosaveSavedAt &&
+          `Draft saved ${formatRelativeTime(autosaveSavedAt)}`}
+        {autosaveStatus === 'error' && (
+          <span className="text-destructive">Autosave failed</span>
+        )}
+      </span>
+
+      {/* Right: Apply button */}
       <Button
         type="button"
         data-testid="btn-apply"
         onClick={onApply}
-        disabled={!canApply || busy}
+        disabled={!canApply || isApplying}
+        variant={justApplied ? 'outline' : 'default'}
       >
         {isApplying ? (
-          <Loader2 size={14} className="mr-1.5 animate-spin" aria-hidden="true" />
+          <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+        ) : justApplied ? (
+          <Check size={14} style={{ color: 'var(--color-seafoam)' }} aria-hidden="true" />
         ) : (
-          <Play size={14} className="mr-1.5" aria-hidden="true" />
+          <Check size={14} aria-hidden="true" />
         )}
-        {isApplying ? 'Applying…' : applyLabel}
+        {isApplying ? 'Applying…' : justApplied ? 'Applied' : applyLabel}
       </Button>
     </div>
   );

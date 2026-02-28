@@ -28,11 +28,10 @@ describe('WorkspaceSetup', () => {
   beforeEach(() => {
     resetTauriMocks();
     mockNavigate.mockClear();
-    // Default: no existing workspace
     mockInvokeCommand('workspace_get', null);
   });
 
-  it('shows validation errors when submitting with empty form via Apply', async () => {
+  it('shows validation errors when Apply is clicked on an empty form', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByTestId('btn-apply'));
@@ -40,7 +39,7 @@ describe('WorkspaceSetup', () => {
     expect(screen.getByText('Migration repo path is required')).toBeInTheDocument();
   });
 
-  it('Apply creates workspace and navigates to /scope', async () => {
+  it('Apply creates workspace and stays on the page', async () => {
     const user = userEvent.setup();
     const ws = makeWorkspace({ id: 'ws-new', displayName: 'Test WS' });
     mockInvokeCommand('workspace_create', ws);
@@ -50,20 +49,7 @@ describe('WorkspaceSetup', () => {
     await user.type(screen.getByTestId('input-repo-path'), '/tmp/repo');
     await user.click(screen.getByTestId('btn-apply'));
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/scope'));
-  });
-
-  it('Save creates workspace and stays on the page', async () => {
-    const user = userEvent.setup();
-    const ws = makeWorkspace({ id: 'ws-new', displayName: 'Test WS' });
-    mockInvokeCommand('workspace_create', ws);
-    renderPage();
-
-    await user.type(screen.getByTestId('input-workspace-name'), 'Test WS');
-    await user.type(screen.getByTestId('input-repo-path'), '/tmp/repo');
-    await user.click(screen.getByTestId('btn-save'));
-
-    // Should NOT navigate away
+    // Apply should NOT navigate — user stays on the current tab.
     await waitFor(() => expect(mockNavigate).not.toHaveBeenCalled());
   });
 

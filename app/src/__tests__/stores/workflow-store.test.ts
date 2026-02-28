@@ -6,7 +6,6 @@ describe('useWorkflowStore', () => {
     useWorkflowStore.setState((s) => ({
       ...s,
       currentStep: 'workspace',
-      completedSteps: [],
       stepStatus: {},
       stepSavedAt: {},
       workspaceId: null,
@@ -15,29 +14,15 @@ describe('useWorkflowStore', () => {
   });
 
   it('has correct initial state', () => {
-    const { currentStep, completedSteps, stepStatus, workspaceId } = useWorkflowStore.getState();
+    const { currentStep, stepStatus, workspaceId } = useWorkflowStore.getState();
     expect(currentStep).toBe('workspace');
-    expect(completedSteps).toHaveLength(0);
     expect(stepStatus).toEqual({});
     expect(workspaceId).toBeNull();
   });
 
-  it('advanceTo updates currentStep', () => {
-    useWorkflowStore.getState().advanceTo('scope');
+  it('setCurrentStep updates currentStep', () => {
+    useWorkflowStore.getState().setCurrentStep('scope');
     expect(useWorkflowStore.getState().currentStep).toBe('scope');
-  });
-
-  it('markComplete adds step to completedSteps and sets status to applied', () => {
-    useWorkflowStore.getState().markComplete('workspace');
-    const { completedSteps, stepStatus } = useWorkflowStore.getState();
-    expect(completedSteps).toContain('workspace');
-    expect(stepStatus.workspace).toBe('applied');
-  });
-
-  it('markComplete is idempotent', () => {
-    useWorkflowStore.getState().markComplete('workspace');
-    useWorkflowStore.getState().markComplete('workspace');
-    expect(useWorkflowStore.getState().completedSteps).toHaveLength(1);
   });
 
   it('saveStep sets status to saved and records timestamp', () => {
@@ -53,22 +38,30 @@ describe('useWorkflowStore', () => {
     expect(useWorkflowStore.getState().stepStatus.scope).toBe('applied');
   });
 
-  it('applyStep adds to completedSteps and sets status to applied', () => {
+  it('applyStep sets status to applied and records timestamp', () => {
     useWorkflowStore.getState().applyStep('candidacy');
-    const { completedSteps, stepStatus } = useWorkflowStore.getState();
-    expect(completedSteps).toContain('candidacy');
+    const { stepStatus, stepSavedAt } = useWorkflowStore.getState();
     expect(stepStatus.candidacy).toBe('applied');
+    expect(stepSavedAt.candidacy).toBeTruthy();
+  });
+
+  it('applyStep is idempotent', () => {
+    useWorkflowStore.getState().applyStep('workspace');
+    const first = useWorkflowStore.getState().stepSavedAt.workspace;
+    useWorkflowStore.getState().applyStep('workspace');
+    // Status stays applied; timestamp updates (that's fine)
+    expect(useWorkflowStore.getState().stepStatus.workspace).toBe('applied');
+    expect(first).toBeTruthy();
   });
 
   it('reset restores initial state', () => {
-    useWorkflowStore.getState().advanceTo('scope');
+    useWorkflowStore.getState().setCurrentStep('scope');
     useWorkflowStore.getState().applyStep('workspace');
     useWorkflowStore.getState().saveStep('scope');
     useWorkflowStore.getState().setWorkspaceId('ws-1');
     useWorkflowStore.getState().reset();
     const state = useWorkflowStore.getState();
     expect(state.currentStep).toBe('workspace');
-    expect(state.completedSteps).toHaveLength(0);
     expect(state.stepStatus).toEqual({});
     expect(state.stepSavedAt).toEqual({});
     expect(state.workspaceId).toBeNull();

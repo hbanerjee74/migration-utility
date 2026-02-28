@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { ThemeProvider } from 'next-themes';
-import StepperNav from './components/stepper-nav';
+import TabNav from './components/stepper-nav';
 import WorkspaceSetup from './routes/workspace-setup';
 import ScopeSelection from './routes/scope-selection';
 import CandidacyReview from './routes/candidacy-review';
@@ -18,9 +18,9 @@ export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <BrowserRouter>
-        <div className="flex min-h-screen bg-background">
-          <StepperNav />
-          <main className="flex-1 overflow-auto">
+        <div className="flex h-screen bg-background overflow-hidden">
+          <TabNav />
+          <main className="flex-1 overflow-auto p-8">
             <Routes>
               <Route path="/" element={<RootRedirect />} />
               <Route path="/workspace" element={<WorkspaceSetup />} />

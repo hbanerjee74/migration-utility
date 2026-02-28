@@ -6,12 +6,12 @@ export default function ReviewLaunch() {
 
   function handleApply() {
     applyStep('launch');
-    // TODO: write plan.md and trigger migration
-    console.log('launch: migration triggered');
+    // TODO: write plan.md and trigger migration orchestrator
+    console.info('launch: migration triggered');
   }
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="max-w-2xl">
       <h1 className="text-base font-semibold tracking-tight">Review & Launch</h1>
       <p className="text-sm text-muted-foreground mt-1 mb-6">
         Review the migration plan and kick off the orchestrator.

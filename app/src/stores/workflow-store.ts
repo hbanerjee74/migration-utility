@@ -23,14 +23,13 @@ export const STEP_ROUTES: Record<WizardStep, string> = {
 };
 
 interface WorkflowState {
+  /** Last visited step — used only for the root-redirect on app restart. */
   currentStep: WizardStep;
-  completedSteps: WizardStep[];
   stepStatus: Partial<Record<WizardStep, StepStatus>>;
   stepSavedAt: Partial<Record<WizardStep, string>>;
   workspaceId: string | null;
   selectedTableIds: string[];
-  advanceTo: (step: WizardStep) => void;
-  markComplete: (step: WizardStep) => void;
+  setCurrentStep: (step: WizardStep) => void;
   saveStep: (step: WizardStep) => void;
   applyStep: (step: WizardStep) => void;
   setWorkspaceId: (id: string) => void;
@@ -42,19 +41,13 @@ export const useWorkflowStore = create<WorkflowState>()(
   persist(
     (set) => ({
       currentStep: 'workspace',
-      completedSteps: [],
       stepStatus: {},
       stepSavedAt: {},
       workspaceId: null,
       selectedTableIds: [],
-      advanceTo: (step) => set({ currentStep: step }),
-      markComplete: (step) => set((s) => ({
-        completedSteps: s.completedSteps.includes(step) ? s.completedSteps : [...s.completedSteps, step],
-        stepStatus: { ...s.stepStatus, [step]: 'applied' as StepStatus },
-        stepSavedAt: { ...s.stepSavedAt, [step]: new Date().toISOString() },
-      })),
+      setCurrentStep: (step) => set({ currentStep: step }),
       saveStep: (step) => set((s) => ({
-        // Don't downgrade 'applied' back to 'saved'
+        // Never downgrade an already-applied step.
         stepStatus: {
           ...s.stepStatus,
           [step]: s.stepStatus[step] === 'applied' ? 'applied' : ('saved' as StepStatus),
@@ -64,13 +57,11 @@ export const useWorkflowStore = create<WorkflowState>()(
       applyStep: (step) => set((s) => ({
         stepStatus: { ...s.stepStatus, [step]: 'applied' as StepStatus },
         stepSavedAt: { ...s.stepSavedAt, [step]: new Date().toISOString() },
-        completedSteps: s.completedSteps.includes(step) ? s.completedSteps : [...s.completedSteps, step],
       })),
       setWorkspaceId: (id) => set({ workspaceId: id }),
       setSelectedTableIds: (ids) => set({ selectedTableIds: ids }),
       reset: () => set({
         currentStep: 'workspace',
-        completedSteps: [],
         stepStatus: {},
         stepSavedAt: {},
         workspaceId: null,
