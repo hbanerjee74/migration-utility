@@ -69,18 +69,6 @@ Implemented:
 
 Primary delivery: PR #19
 
-### 6. Seed data command
-
-Status: backend done, UI trigger pending
-
-Implemented:
-- `seed_mock_data` backend command with realistic fixture set
-
-Not yet implemented:
-- debug-only UI entrypoint to invoke seed from app surface
-
-Primary delivery: PR #4
-
 ---
 
 ## Pending Work
@@ -124,15 +112,7 @@ Current state:
 Action:
 - add explicit test coverage for sidecar readiness + ping/pong behavior on the Rust path
 
-### D. Seed invocation path
-
-Status: pending
-
-Action:
-- add debug-only UI control to call `seed_mock_data`
-- hide in production builds
-
-### E. Regression coverage for current critical paths
+### D. Regression coverage for current critical paths
 
 Status: pending
 
@@ -150,11 +130,9 @@ Add tests for:
 
 1. Add missing tests for monitor/usage/workspace safety paths.
 2. Add sidecar health verification tests (ready + ping/pong).
-3. Add debug-only seed trigger UI.
 
 Exit criteria:
 - critical regression suite exists and passes in CI
-- seed path can be exercised without manual DB edits
 
 ### Milestone 2: Implement Scope flow
 

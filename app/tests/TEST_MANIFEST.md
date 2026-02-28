@@ -10,7 +10,6 @@ Maps source files to tests. Update when adding new Rust commands or E2E specs.
 | `commands::fabric` | `commands::fabric` | `@fabric` |
 | `commands::migration` | `commands::migration` | `@candidacy` |
 | `commands::plan` | `commands::plan` | `@launch` |
-| `commands::seed` | `commands::seed` | `@workspace` |
 
 ## Frontend Unit/Integration Tests
 

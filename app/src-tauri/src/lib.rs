@@ -67,8 +67,6 @@ pub fn run() {
             commands::github_auth::github_get_user,
             commands::github_auth::github_logout,
             commands::github_auth::github_list_repos,
-            #[cfg(debug_assertions)]
-            commands::seed::seed_mock_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
