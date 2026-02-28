@@ -51,6 +51,7 @@ interface WorkflowState {
   setCurrentScopeStep: (step: ScopeStep) => void;
   saveScopeStep: (step: ScopeStep) => void;
   setWorkspaceId: (id: string) => void;
+  clearWorkspaceId: () => void;
   setSelectedTableIds: (ids: string[]) => void;
   setMigrationStatus: (status: MigrationStatus) => void;
   reset: () => void;
@@ -83,6 +84,8 @@ export const useWorkflowStore = create<WorkflowState>()(
       })),
 
       setWorkspaceId: (id) => set({ workspaceId: id }),
+
+      clearWorkspaceId: () => set({ workspaceId: null }),
 
       setSelectedTableIds: (ids) => set({ selectedTableIds: ids }),
 

@@ -1,21 +1,21 @@
-import { useState } from 'react';
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { logger, LOG_LEVELS, getStoredLogLevel, storeLogLevel, type LogLevel } from '@/lib/logger';
+import { setLogLevel, getLogFilePath, getDataDirPath } from '@/lib/tauri';
 
-// ── Log level descriptions ─────────────────────────────────────────────────
+// ── Log level descriptions ──────────────────────────────────────────────────
 
 const LEVEL_DESCRIPTION: Record<LogLevel, string> = {
-  debug: 'All messages including verbose internals',
-  info:  'Key lifecycle events (default)',
+  debug: 'Everything (verbose)',
+  info:  'Key events (default)',
   warn:  'Warnings and errors only',
   error: 'Errors only',
 };
 
-// ── Theme toggle ───────────────────────────────────────────────────────────
+// ── Theme toggle ────────────────────────────────────────────────────────────
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System', icon: Monitor },
@@ -53,86 +53,100 @@ function ThemeToggle() {
   );
 }
 
-// ── Log level card ─────────────────────────────────────────────────────────
+// ── Path row ────────────────────────────────────────────────────────────────
 
-function LogLevelCard() {
-  const [level, setLevel] = useState<LogLevel>(() => getStoredLogLevel());
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const next = e.target.value as LogLevel;
-    storeLogLevel(next);
-    setLevel(next);
-    logger.info(`logging: level changed to ${next}`);
-  }
-
-  function handleTestLogs() {
-    logger.debug('logging: test debug message');
-    logger.info('logging: test info message');
-    logger.warn('logging: test warn message');
-    logger.error('logging: test error message');
-  }
-
+function PathRow({ label, path, testId }: { label: string; path: string | null; testId?: string }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm">Logging</CardTitle>
-        <CardDescription className="text-xs mt-0.5">
-          Minimum level emitted to the browser console. Messages below this level are suppressed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0 flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <select
-            data-testid="select-log-level"
-            value={level}
-            onChange={handleChange}
-            className="h-9 w-fit rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            {LOG_LEVELS.map((l) => (
-              <option key={l} value={l}>
-                {l.charAt(0).toUpperCase() + l.slice(1)}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">{LEVEL_DESCRIPTION[level]}</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="btn-fire-test-logs"
-            onClick={handleTestLogs}
-            className="text-xs"
-          >
-            Fire test logs
-          </Button>
-          <p className="text-xs text-muted-foreground">Opens DevTools console to see output</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-start gap-4 py-1.5">
+      <span className="text-xs text-muted-foreground shrink-0 w-36 pt-0.5">{label}</span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+        <code className="text-xs font-mono text-muted-foreground truncate" data-testid={testId}>
+          {path ?? 'Loading…'}
+        </code>
+      </div>
+    </div>
   );
 }
 
-// ── Profile tab ────────────────────────────────────────────────────────────
+// ── Profile tab ─────────────────────────────────────────────────────────────
 
 export default function ProfileTab() {
-  return (
-    <div className="p-5 max-w-lg flex flex-col gap-4" data-testid="settings-profile-tab">
-      {/* Appearance */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Appearance</CardTitle>
-          <CardDescription className="text-xs mt-0.5">
-            Choose your preferred colour scheme.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <ThemeToggle />
-        </CardContent>
-      </Card>
+  const [level, setLevel] = useState<LogLevel>(() => getStoredLogLevel());
+  const [logFilePath, setLogFilePath] = useState<string | null>(null);
+  const [dataDirPath, setDataDirPath] = useState<string | null>(null);
 
-      <LogLevelCard />
+  useEffect(() => {
+    getLogFilePath().then(setLogFilePath).catch(() => setLogFilePath(null));
+    getDataDirPath().then(setDataDirPath).catch(() => setDataDirPath(null));
+  }, []);
+
+  function handleLevelChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const next = e.target.value as LogLevel;
+    storeLogLevel(next);
+    setLevel(next);
+    setLogLevel(next).catch(() => {});
+    logger.info(`logging: level changed to ${next}`);
+  }
+
+  return (
+    <div className="px-8 py-6 h-full overflow-auto" data-testid="settings-profile-tab">
+      <div className="max-w-lg flex flex-col gap-6">
+
+        {/* Appearance */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Appearance</CardTitle>
+            <CardDescription className="text-xs mt-0.5">
+              Choose your preferred colour scheme.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ThemeToggle />
+          </CardContent>
+        </Card>
+
+        {/* Logging — flat section, no card border */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium text-foreground">Logging</p>
+          <div className="flex items-center gap-3">
+            <select
+              data-testid="select-log-level"
+              value={level}
+              onChange={handleLevelChange}
+              className="h-9 w-fit rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {LOG_LEVELS.map((l) => (
+                <option key={l} value={l}>
+                  {l.charAt(0).toUpperCase() + l.slice(1)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">{LEVEL_DESCRIPTION[level]}</p>
+          </div>
+        </div>
+
+        {/* Directories — flat section */}
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-foreground mb-1">Directories</p>
+          <PathRow
+            label="Working Directory"
+            path="~/.vibedata/migration-utility"
+            testId="path-working-dir"
+          />
+          <PathRow
+            label="Log File"
+            path={logFilePath}
+            testId="path-log-file"
+          />
+          <PathRow
+            label="Data Directory"
+            path={dataDirPath}
+            testId="path-data-dir"
+          />
+        </div>
+
+      </div>
     </div>
   );
 }

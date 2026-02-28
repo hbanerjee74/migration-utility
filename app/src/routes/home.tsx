@@ -3,7 +3,7 @@ import { Settings, Activity, LayoutGrid, CheckCircle2, Square } from 'lucide-rea
 import { useWorkflowStore, SCOPE_STEPS, SCOPE_STEP_LABELS } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 
-// ── Setup state (no settings configured) ─────────────────────────────────────
+// ── Setup state (no workspace configured) ────────────────────────────────────
 
 function SetupState() {
   const navigate = useNavigate();
@@ -35,7 +35,7 @@ function SetupState() {
   );
 }
 
-// ── Dashboard state (settings configured) ────────────────────────────────────
+// ── Dashboard state (workspace configured) ───────────────────────────────────
 
 // Placeholder counts until scope data is wired from the backend.
 const STEP_COUNTS: Record<string, string> = {
@@ -55,7 +55,7 @@ function DashboardState() {
 
       {/* Active Migration card */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
           Active Migration
         </p>
         <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
@@ -81,7 +81,7 @@ function DashboardState() {
           <div className="flex items-center gap-3">
             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full transition-all"
+                className="h-full rounded-full transition-all duration-200"
                 style={{
                   width: isRunning ? '60%' : '0%',
                   backgroundColor: 'var(--color-pacific)',
@@ -124,7 +124,7 @@ function DashboardState() {
 
         {/* Setup summary */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+          <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
             Setup
           </p>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
@@ -144,7 +144,7 @@ function DashboardState() {
 
         {/* Quick Actions */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+          <p className="text-[11px] font-medium tracking-wide text-muted-foreground/60 uppercase mb-2">
             Quick Actions
           </p>
           <div className="rounded-lg border border-border bg-card p-2 flex flex-col gap-1">

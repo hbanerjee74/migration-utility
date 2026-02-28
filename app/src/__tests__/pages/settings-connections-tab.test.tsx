@@ -34,17 +34,16 @@ describe('ConnectionsTab — GitHub card', () => {
     expect(screen.getByText('Not connected')).toBeVisible();
   });
 
-  it('shows user info and Sign Out when connected', async () => {
+  it('shows github URL and Disconnect when connected', async () => {
     mockInvokeCommands({ github_get_user: MOCK_USER });
     renderTab();
     await waitFor(() => {
-      expect(screen.getByText('@octocat')).toBeVisible();
+      expect(screen.getByText('github.com/octocat')).toBeVisible();
     });
-    expect(screen.getByText('octocat@github.com')).toBeVisible();
     expect(screen.getByTestId('btn-disconnect-github')).toBeVisible();
   });
 
-  it('Sign Out button is disabled when migration is running', async () => {
+  it('Disconnect button is disabled when migration is running', async () => {
     useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, isLoading: false });
     mockInvokeCommands({ github_get_user: MOCK_USER });
     const { useWorkflowStore } = await import('@/stores/workflow-store');
