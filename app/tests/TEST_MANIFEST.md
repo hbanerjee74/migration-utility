@@ -17,6 +17,7 @@ Maps source files to tests. Update when adding new Rust commands or E2E specs.
 | Test file | What it covers |
 | --- | --- |
 | `src/__tests__/stores/workflow-store.test.ts` | Store actions and migration state updates |
+| `src/__tests__/lib/logger.test.ts` | Frontend log-level persistence and level-based console filtering |
 | `src/__tests__/components/icon-nav.test.tsx` | Icon nav routing and active-state behavior |
 | `src/__tests__/components/scope-step-nav.test.tsx` | Scope step nav and locked-state behavior |
 | `src/__tests__/pages/settings-workspace-tab.test.tsx` | Workspace form validation and apply/reset flow |

@@ -26,3 +26,20 @@ pub fn get_data_dir_path(app: AppHandle) -> Result<String, String> {
         .map(|s| s.to_string())
         .ok_or_else(|| "Data dir path contains invalid UTF-8".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_log_level_sets_debug() {
+        set_log_level("debug".to_string()).expect("set_log_level should succeed");
+        assert_eq!(log::max_level(), log::LevelFilter::Debug);
+    }
+
+    #[test]
+    fn set_log_level_defaults_to_info_for_unknown() {
+        set_log_level("not-a-level".to_string()).expect("set_log_level should succeed");
+        assert_eq!(log::max_level(), log::LevelFilter::Info);
+    }
+}

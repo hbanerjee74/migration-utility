@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import ConnectionsTab from '../../routes/settings/connections-tab';
 import { mockInvokeCommands, resetTauriMocks } from '../../test/mocks/tauri';
 import { useAuthStore } from '@/stores/auth-store';
+import { useWorkflowStore } from '@/stores/workflow-store';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -17,6 +18,7 @@ const MOCK_USER = {
   avatar_url: 'https://github.com/octocat.png',
   email: 'octocat@github.com',
 };
+const initialAuthState = useAuthStore.getState();
 
 function renderTab() {
   return render(
@@ -28,7 +30,17 @@ function renderTab() {
 
 beforeEach(() => {
   resetTauriMocks();
-  useAuthStore.setState({ user: null, isLoggedIn: false, isLoading: false, lastCheckedAt: null });
+  useAuthStore.setState({
+    user: null,
+    isLoggedIn: false,
+    isLoading: false,
+    lastCheckedAt: null,
+    loadUser: initialAuthState.loadUser,
+    setUser: initialAuthState.setUser,
+    logout: initialAuthState.logout,
+    reset: initialAuthState.reset,
+  });
+  useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'idle' }));
 });
 
 describe('ConnectionsTab — GitHub card', () => {
@@ -57,15 +69,21 @@ describe('ConnectionsTab — GitHub card', () => {
   });
 
   it('Disconnect button is disabled when migration is running', async () => {
-    useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, isLoading: false, lastCheckedAt: null });
+    useAuthStore.setState({
+      user: MOCK_USER,
+      isLoggedIn: true,
+      isLoading: false,
+      lastCheckedAt: null,
+      loadUser: async () => {},
+    });
     mockInvokeCommands({ github_get_user: MOCK_USER, get_settings: { anthropicApiKey: null } });
-    const { useWorkflowStore } = await import('@/stores/workflow-store');
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+    act(() => {
+      useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+    });
     renderTab();
     await waitFor(() => {
       expect(screen.getByTestId('btn-disconnect-github')).toBeDisabled();
     });
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'idle' }));
   });
 
   it('shows checking state while auth is loading', async () => {
