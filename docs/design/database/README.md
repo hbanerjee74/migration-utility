@@ -1,297 +1,180 @@
 # Database Design
 
-SQLite database local to the Tauri desktop app. Stores a read-only mirror of the
-Fabric workspace (Fabric layer) and the FDE's migration decisions on top of it
-(Migration layer).
+SQLite database local to the Tauri desktop app.
 
----
+This schema is connector-pluggable (VU-374 direction): each connector extracts
+its metadata into one canonical model used by scope, candidate selection, and planning.
 
-## Hierarchy
+## Canonical Model
 
-Fabric objects form a four-level tree. The schema follows this structure exactly.
+### 1) `sources`
+
+Top-level configured source context in the app (connection profile + local repo context + workflow state).
+
+`source_type` selects the extractor implementation (currently SQL Server).
+
+Connector mapping:
+
+- SQL Server: connection
+- Fabric: workspace
+
+### 2) `containers`
+
+Top-level units discovered under a source.
+
+Examples by connector:
+
+- SQL Server: database
+- Fabric: Warehouse item, Lakehouse item
+
+### 3) `namespaces`
+
+Logical namespace within a data container.
+
+Examples:
+
+- SQL Server: schema
+- Fabric Warehouse: schema
+- Fabric Lakehouse: schema (or connector-normalized default namespace)
+
+### 4) `data_objects`
+
+Objects discovered within a namespace.
+
+Examples:
+
+- table
+- view
+- procedure
+- function
+
+### 5) `orchestration_items`
+
+Parent orchestration units directly under a source.
+
+Examples:
+
+- Fabric: pipeline
+- SQL Server: optional future mapping (job/task orchestration, if ingested)
+
+### 6) `orchestration_activities`
+
+Activity/step rows under an orchestration item.
+
+Examples:
+
+- Fabric: pipeline activity from definition JSON
+
+### 7) `activity_object_links`
+
+Read/write/reference links from an orchestration activity to a data object.
+
+### 8) Connector extension tables
+
+Connector-specific metadata keyed by canonical IDs. These add depth without changing the canonical flow.
+
+Examples:
+
+- SQL Server runtime stats
+- SQL Server partition metadata
+- SQL Server procedure parameter metadata
+- DDL snapshots
+
+## Canonical Relationships
 
 ```text
-Level 1 — Workspace
-└── Level 2 — Item  (type: Warehouse | DataPipeline | Notebook)
-    │
-    ├── [Warehouse] Level 3 — Schema
-    │                └── Level 4 — Table
-    │                └── Level 4 — Stored Procedure
-    │
-    └── [DataPipeline] Level 3 — Activity
+source
+├── container (data)
+│   └── namespace
+│       └── data_object
+└── orchestration_item
+    └── orchestration_activity
+        └── activity_object_link -> data_object
 ```
 
-Each level has its own table. Foreign keys enforce the parent-child relationships so
-the full tree can be traversed top-down or bottom-up.
+Execution metadata is intentionally modeled as a separate branch and references data objects via link tables.
 
----
+## Foundational Detailed Table Contracts
 
-## Fabric Layer
+This section is the canonical contract for local SQLite table design. It keeps top-level concepts and implementation details in one place.
 
-Mirrors the Fabric API response. Never edited by the FDE directly. Populated by the
-workspace scanner during the import step.
+### Canonical Core Tables
 
-### `workspaces`
+| Local table | Description | PK columns | FK columns | Unique index | FK index | SQL Server physical ID mapping | Fabric Warehouse physical ID mapping | Fabric Lakehouse physical ID mapping |
+|---|---|---|---|---|---|---|---|---|
+| `sources` | Top-level configured source context | `id` | — | `ux_sources_external (source_type, external_source_id)` | — | `external_source_id = sanitized_connection_identity` | `external_source_id = workspace_id` | `external_source_id = workspace_id` |
+| `containers` | Data containers under a source | `id` | `source_id -> sources.id` | `ux_containers_external (source_id, container_type, external_container_id)` | `ix_containers_source_id (source_id)` | `external_container_id = sys.databases.database_id` | `external_container_id = items.id (Warehouse)` | `external_container_id = items.id (Lakehouse)` |
+| `namespaces` | Schema/namespace under a container | `id` | `container_id -> containers.id` | `ux_namespaces_natural (container_id, namespace_name)` | `ix_namespaces_container_id (container_id)` | `external_namespace_id = sys.schemas.schema_id` | `external_namespace_id = sys.schemas.schema_id (if available)` | `external_namespace_id = null` |
+| `data_objects` | Table/view/procedure/function in namespace | `id` | `namespace_id -> namespaces.id` | `ux_data_objects_natural (namespace_id, object_name, object_type)` | `ix_data_objects_namespace_id (namespace_id)` | `external_object_id = sys.objects.object_id` | `external_object_id = sys.objects.object_id (if available)` | `external_object_id = null` |
+| `orchestration_items` | Parent orchestration unit | `id` | `source_id -> sources.id` | `ux_orchestration_items_external (source_id, orchestration_type, external_orchestration_id)` | `ix_orchestration_items_source_id (source_id)` | `null` | `external_orchestration_id = DataPipeline item id` | `external_orchestration_id = DataPipeline item id` |
+| `orchestration_activities` | Activities under orchestration item | `id` | `orchestration_item_id -> orchestration_items.id` | `ux_orchestration_activities_natural (orchestration_item_id, activity_name)` | `ix_orchestration_activities_item_id (orchestration_item_id)` | `null` | `external_activity_id = null (use activity_name)` | `external_activity_id = null (use activity_name)` |
+| `activity_object_links` | Activity-to-object dependency links | `id` | `orchestration_activity_id -> orchestration_activities.id`; `data_object_id -> data_objects.id` | `ux_activity_object_links (orchestration_activity_id, data_object_id, access_type, evidence_source)` | `ix_activity_object_links_activity_id (orchestration_activity_id)`; `ix_activity_object_links_data_object_id (data_object_id)` | `derived` | `derived` | `derived` |
 
-One row per Fabric workspace connected to this app.
+### SQL Server Extension Tables (Current Implemented Depth)
 
-| Column | Type | Source |
-|---|---|---|
-| `id` | TEXT PK | `WorkspaceInfo.id` (UUID) |
-| `display_name` | TEXT NOT NULL | `WorkspaceInfo.displayName` |
-| `migration_repo_path` | TEXT NOT NULL | Local path (FDE-provided) |
-| `source_type` | TEXT | Source connector type: `sql_server \| fabric_warehouse` |
-| `source_server` | TEXT | Source SQL endpoint / host |
-| `source_database` | TEXT | Source database / catalog name |
-| `source_port` | INTEGER | Source SQL port (typically `1433`) |
-| `source_authentication_mode` | TEXT | Source auth mode (`sql_password \| entra_service_principal`) |
-| `source_username` | TEXT | Login / principal ID |
-| `source_password` | TEXT | Password / secret |
-| `source_encrypt` | INTEGER | Transport encryption enabled (`0/1`) |
-| `source_trust_server_certificate` | INTEGER | Trust server cert toggle (`0/1`) |
-| `created_at` | TEXT NOT NULL | App-generated timestamp |
-
-### `items`
+| Local table | Description | PK columns | FK columns | Physical ID basis |
+|---|---|---|---|---|
+| `sqlserver_object_columns` | Column metadata per source object | `id` | `data_object_id -> data_objects.id` | `sys.columns.column_id` within `sys.objects.object_id` |
+| `sqlserver_constraints_indexes` | PK/FK/unique/check/index metadata | `id` | `data_object_id -> data_objects.id` | Constraint/index names scoped by table |
+| `sqlserver_partitions` | Partition structure and metrics | `id` | `data_object_id -> data_objects.id` | `sys.partitions.partition_number` |
+| `sqlserver_procedure_parameters` | Procedure parameter metadata | `id` | `data_object_id -> data_objects.id` | `sys.parameters.parameter_id` |
+| `sqlserver_procedure_runtime_stats` | Procedure runtime recency and usage stats | `id` | `data_object_id -> data_objects.id` | Query Store and/or DMV procedure stats keyed to procedure object identity |
+| `sqlserver_procedure_lineage` | Procedure-to-table lineage edges | `id` | `procedure_data_object_id -> data_objects.id`; `table_data_object_id -> data_objects.id` | Derived from dependency metadata |
+| `sqlserver_table_ddl_snapshots` | Stored table DDL snapshots | `id` | `data_object_id -> data_objects.id` | Table logical key + captured DDL |
 
-All workspace-level Fabric items. One row per item regardless of type.
+### Accuracy Notes for Physical IDs
 
-| Column | Type | Source |
-|---|---|---|
-| `id` | TEXT PK | `Item.id` (UUID, globally unique across Fabric) |
-| `workspace_id` | TEXT NOT NULL → `workspaces.id` | `Item.workspaceId` |
-| `display_name` | TEXT NOT NULL | `Item.displayName` |
-| `description` | TEXT | `Item.description` (optional) |
-| `folder_id` | TEXT | `Item.folderId` — null means workspace root |
-| `item_type` | TEXT NOT NULL | `Item.type` — see CHECK below |
-| `connection_string` | TEXT | `WarehouseProperties.connectionString` — Warehouse only |
-| `collation_type` | TEXT | `WarehouseProperties.collationType` — Warehouse only |
+- SQL Server provides stable local IDs for databases (`database_id`), schemas (`schema_id`), objects (`object_id`), columns (`column_id`), and procedure parameters (`parameter_id`).
+- SQL Server `sources.external_source_id` should be a sanitized canonical connection identity (never raw credential-bearing connection strings).
+- Fabric Items APIs provide stable item IDs for Warehouse, Lakehouse, and DataPipeline items (`items.id`).
+- Fabric pipeline activity identity in definitions is activity `name` within a pipeline; no separate documented activity GUID.
+- Fabric Lakehouse table APIs document table name/type/location fields but do not document a stable table UUID; use logical key plus location/path when needed.
 
-`item_type` CHECK: `'Warehouse' \| 'DataPipeline' \| 'Notebook'`
+### API References Used for ID Mapping
 
-`connection_string` and `collation_type` are null for non-Warehouse rows. Populated
-from `GET /warehouses/{warehouseId}` — the generic items endpoint does not return them.
+- SQL Server `sys.databases`: https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-databases-transact-sql
+- SQL Server `sys.schemas`: https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/schemas-catalog-views-sys-schemas
+- SQL Server `sys.columns`: https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-columns-transact-sql
+- SQL Server object catalogs (`sys.all_objects`/`sys.system_objects`): https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-system-objects-transact-sql
+- SQL Server `sys.parameters`: https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-parameters-transact-sql
+- Fabric Core Items List (Warehouse/Lakehouse/DataPipeline IDs): https://learn.microsoft.com/en-us/rest/api/fabric/core/items/list-items
+- Fabric DataPipeline definition (activities): https://learn.microsoft.com/en-us/rest/api/fabric/datapipeline/items/get-data-pipeline-definition
+- Fabric Lakehouse table APIs: https://learn.microsoft.com/en-us/rest/api/fabric/lakehouse/tables/list-tables
 
-### `warehouse_schemas`
+## Apply and Refresh Semantics
 
-Level 3 — schemas within a warehouse. Populated via T-SQL:
+### Settings -> Source -> Apply
 
-```sql
-SELECT schema_id, name FROM sys.schemas
-```
+Apply initializes or refreshes local source metadata for the selected source:
 
-| Column | Type | Source |
-|---|---|---|
-| `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
-| `schema_name` | TEXT NOT NULL | `sys.schemas.name` |
-| `schema_id_local` | INTEGER | `sys.schemas.schema_id` — DB-scoped, not portable |
+- validates connection and access
+- loads/discovers canonical entities
+- writes canonical tables and connector extensions
+- supports progress + cancel
+- is idempotent on re-run
 
-PK: `(warehouse_item_id, schema_name)`
+### Scope -> Select Tables -> Refresh Schema
 
-### `warehouse_tables`
+Refresh is performed from scope (not settings) and re-syncs source metadata used for table selection and downstream planning.
 
-Level 4 — tables within a schema. Populated via T-SQL:
+## FK Delete Policy
 
-```sql
-SELECT table_schema, table_name FROM INFORMATION_SCHEMA.TABLES
-```
+Delete behavior is cascade-by-default. This app does not preserve historical user decision records when upstream source entities are removed.
 
-| Column | Type | Source |
-|---|---|---|
-| `warehouse_item_id` | TEXT NOT NULL → `warehouse_schemas` | — |
-| `schema_name` | TEXT NOT NULL → `warehouse_schemas` | `INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA` |
-| `table_name` | TEXT NOT NULL | `INFORMATION_SCHEMA.TABLES.TABLE_NAME` |
-| `object_id_local` | INTEGER | `sys.objects.object_id` — DB-scoped, not portable |
-| `row_count_estimate` | INTEGER | Estimated table row count from profiler/import scan |
-| `avg_daily_row_change_7d` | REAL | Average daily row change over trailing 7-day window |
-| `pk_columns_json` | TEXT | JSON array of primary key columns (empty if unknown) |
+### Cascading FK chains
 
-PK: `(warehouse_item_id, schema_name, table_name)`
+- `sources -> containers -> namespaces -> data_objects`
+- `sources -> orchestration_items -> orchestration_activities -> activity_object_links`
+- `data_objects -> activity_object_links`
+- `data_objects -> sqlserver_*` extension tables
+- Scope/planning/user-decision tables should cascade from their parent rows
 
-Composite FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas(warehouse_item_id, schema_name)`
+### Rule
 
-### `warehouse_procedures`
+- Default FK action: `ON DELETE CASCADE`
+- Use `RESTRICT` only when a specific business rule requires blocking deletion
+- No soft-delete requirement for source mirror or user-decision tables in this model
 
-Level 4 — stored procedures within a schema. Populated via T-SQL:
+## Naming Note
 
-```sql
-SELECT routine_schema, routine_name, routine_definition
-  FROM INFORMATION_SCHEMA.ROUTINES
- WHERE routine_type = 'PROCEDURE'
-```
-
-| Column | Type | Source |
-|---|---|---|
-| `warehouse_item_id` | TEXT NOT NULL → `warehouse_schemas` | — |
-| `schema_name` | TEXT NOT NULL → `warehouse_schemas` | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_SCHEMA` |
-| `procedure_name` | TEXT NOT NULL | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_NAME` |
-| `object_id_local` | INTEGER | `sys.objects.object_id` — DB-scoped, not portable |
-| `sql_body` | TEXT | `INFORMATION_SCHEMA.ROUTINES.ROUTINE_DEFINITION` |
-
-PK: `(warehouse_item_id, schema_name, procedure_name)`
-
-Composite FK: `(warehouse_item_id, schema_name)` → `warehouse_schemas(warehouse_item_id, schema_name)`
-
-### `pipeline_activities`
-
-Level 3 — activities within a DataPipeline item. Populated by decoding the pipeline
-definition from `POST /dataPipelines/{id}/getDefinition` (Base64-encoded JSON).
-
-`activity_name` is the unique key within a pipeline — there is no separate `id` field
-in the pipeline JSON. `endpointitemId` in the activity JSON maps to `items.id`.
-
-| Column | Type | Source |
-|---|---|---|
-| `id` | INTEGER PK AUTOINCREMENT | — |
-| `pipeline_item_id` | TEXT NOT NULL → `items.id` | — |
-| `activity_name` | TEXT NOT NULL | `activity.name` — unique within pipeline |
-| `activity_type` | TEXT NOT NULL | `activity.type` (e.g. `SqlServerStoredProcedure`) |
-| `target_warehouse_item_id` | TEXT → `items.id` | `typeProperties.endpointitemId` |
-| `target_schema_name` | TEXT | Parsed from `typeProperties` |
-| `target_procedure_name` | TEXT | `typeProperties.storedProcedureName` |
-| `parameters_json` | TEXT | `typeProperties.storedProcedureParameters` (JSON) |
-| `depends_on_json` | TEXT | `dependsOn` array — `activity_name` references (JSON) |
-
-UNIQUE: `(pipeline_item_id, activity_name)`
-
----
-
-## Migration Layer
-
-FDE decisions built on top of the Fabric layer. These tables are written by the app
-as the FDE works through the 5-step wizard.
-
-### `selected_tables`
-
-Tables the FDE has chosen to include in the migration (scope selection step).
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT PK | App-generated UUID |
-| `workspace_id` | TEXT NOT NULL → `workspaces.id` | — |
-| `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
-| `schema_name` | TEXT NOT NULL | — |
-| `table_name` | TEXT NOT NULL | — |
-
-### `table_artifacts`
-
-Discovery agent output: which stored procedure writes to each selected table.
-
-| Column | Type | Notes |
-|---|---|---|
-| `selected_table_id` | TEXT PK → `selected_tables.id` | — |
-| `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
-| `schema_name` | TEXT NOT NULL | — |
-| `procedure_name` | TEXT NOT NULL | — |
-| `pipeline_activity_id` | INTEGER → `pipeline_activities.id` | Null if not found in any pipeline |
-| `discovery_status` | TEXT NOT NULL | `resolved \| orphan \| duplicate_writer` |
-
-### `candidacy`
-
-AI classification of each stored procedure (keyed to the procedure, not the table —
-one proc can write multiple tables).
-
-| Column | Type | Notes |
-|---|---|---|
-| `warehouse_item_id` | TEXT NOT NULL → `items.id` | — |
-| `schema_name` | TEXT NOT NULL | — |
-| `procedure_name` | TEXT NOT NULL | — |
-| `tier` | TEXT NOT NULL | `migrate \| review \| reject` |
-| `reasoning` | TEXT | Agent's explanation |
-| `overridden` | INTEGER NOT NULL DEFAULT 0 | 1 if FDE changed the tier |
-| `override_reason` | TEXT | FDE's reason for override |
-
-PK: `(warehouse_item_id, schema_name, procedure_name)`
-
-### `table_config`
-
-Agent-suggested, FDE-confirmed settings per selected table (table config step).
-
-| Column | Type | Notes |
-|---|---|---|
-| `selected_table_id` | TEXT PK → `selected_tables.id` | — |
-| `table_type` | TEXT | `fact \| dimension \| unknown` — what the table *is* |
-| `load_strategy` | TEXT | `incremental \| full_refresh \| snapshot` — how dbt loads it |
-| `grain_columns` | TEXT | JSON array — columns that define row uniqueness (dbt `unique_key`) |
-| `relationships_json` | TEXT | JSON array: `[{column, ref_table, ref_column}]` |
-| `incremental_column` | TEXT | CDC/watermark column for detecting new/changed rows |
-| `date_column` | TEXT | Canonical business date for partition pruning and fixture sampling |
-| `snapshot_strategy` | TEXT NOT NULL DEFAULT `sample_1day` | `sample_1day \| full \| full_flagged` |
-| `pii_columns` | TEXT | JSON array of column names |
-| `scd_type` | TEXT | `none \| type1 \| type2` for dimension handling |
-| `scd_natural_key_columns` | TEXT | JSON array of natural key columns for SCD |
-| `scd_effective_from_column` | TEXT | Effective start timestamp/date column (Type 2) |
-| `scd_effective_to_column` | TEXT | Effective end timestamp/date column (Type 2) |
-| `scd_is_current_column` | TEXT | Current-row marker column (Type 2) |
-| `confirmed_at` | TEXT | ISO 8601 timestamp — null until FDE confirms |
-
-### `table_plan`
-
-Per-table execution plan used by coding agents (Plan step). Stores editable plan
-markdown plus lifecycle state from refresh → validate → approve.
-
-| Column | Type | Notes |
-|---|---|---|
-| `selected_table_id` | TEXT PK → `selected_tables.id` | — |
-| `plan_markdown` | TEXT | Editable per-table plan content |
-| `status` | TEXT NOT NULL DEFAULT `missing` | `missing \| draft \| stale \| approved` |
-| `validation_status` | TEXT NOT NULL DEFAULT `not_run` | `not_run \| pass \| fail` |
-| `validation_errors_json` | TEXT | JSON array/string of validation failures |
-| `input_fingerprint` | TEXT | Hash of plan inputs (`table_config` snapshot) to detect stale plans |
-| `version` | INTEGER NOT NULL DEFAULT 1 | Incremented when plan markdown is refreshed/re-generated |
-| `refreshed_at` | TEXT | ISO 8601 timestamp of latest plan refresh |
-| `validated_at` | TEXT | ISO 8601 timestamp of latest validation run |
-| `approved_at` | TEXT | ISO 8601 timestamp when FDE approved this plan |
-| `approved_by` | TEXT | Optional FDE identifier |
-| `created_at` | TEXT NOT NULL | App-generated timestamp |
-| `updated_at` | TEXT NOT NULL | App-generated timestamp |
-
-## Design Notes
-
-- **`warehouse_item_id` is always a FK to `items.id`** — used in every sub-warehouse
-  table as the level 2 anchor. In `warehouse_tables` and `warehouse_procedures` it is
-  part of a composite FK to `warehouse_schemas`, which itself references `items.id`.
-
-- **`object_id_local`** — `sys.objects.object_id` is scoped to the database instance.
-  Stored as a lookup hint only. Never used as a cross-system key. Natural composite
-  keys (item id + schema + object name) are the portable identifiers.
-
-- **`connection_string` and `collation_type` on `items`** — nullable, only set for
-  Warehouse rows. Avoids a separate table and a JOIN every time the scanner needs the
-  TDS endpoint.
-
-- **`folder_id` null = workspace root** — the Fabric API omits `folderId` entirely
-  for root-level items rather than returning null. Treat its absence as root placement.
-
-- **`target_warehouse_item_id` in `pipeline_activities`** — maps `endpointitemId` from
-  the pipeline JSON to `items.id`, linking each activity to the warehouse it targets.
-
-- **`candidacy` is keyed to the procedure** — one stored proc can write multiple
-  tables, so candidacy classification lives at the procedure level, not the table level.
-
-- **`table_type` vs `load_strategy` in `table_config`** — orthogonal concerns. `table_type`
-  describes what the table *is* (fact, dimension); `load_strategy` describes how dbt should
-  load it (incremental, full_refresh, snapshot). A dimension can be full-refreshed; a fact
-  can be incremental. Both are null until the agent suggests them and the FDE confirms.
-
-- **`incremental_column` vs `date_column`** — `incremental_column` is the watermark used to
-  detect new or changed rows (CDC / high-watermark pattern). `date_column` is the business
-  event date used for partition pruning and defining snapshot periods — often different from
-  the watermark column.
-
-- **Table profiling fields on `warehouse_tables`** — `row_count_estimate`,
-  `avg_daily_row_change_7d`, and `pk_columns_json` are source-derived profiling metadata used by
-  Scope and fixture planning. They are not FDE decisions.
-
-- **`grain_columns`** — JSON array of column names that together define a unique row. Maps
-  directly to dbt's `unique_key` config. Null until the agent proposes it.
-
-- **`relationships_json`** — JSON array of `{column, ref_table, ref_column}` objects. Captures
-  the FK relationships the agent infers from the stored procedure's JOIN patterns.
-
-- **SCD fields on `table_config`** — SCD behavior is an FDE-confirmed migration decision, so
-  `scd_type` and related SCD columns are stored with table config rather than source metadata.
-
-- **`table_plan` is separate from `table_config`** — `table_config` stores structured
-  migration metadata; `table_plan` stores agent-facing editable markdown and plan lifecycle
-  state (`missing/draft/stale/approved`). Keeping them separate preserves deterministic config
-  while enabling iterative FDE plan editing and approval.
+This design uses `source` as the top-level concept. Existing physical tables may temporarily use legacy names during migration; implementation should converge on the canonical names above.
