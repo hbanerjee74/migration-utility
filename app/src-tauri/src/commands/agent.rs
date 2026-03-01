@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use std::{fs, io::Write};
 use std::time::Duration;
+use std::{fs, io::Write};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -214,9 +214,12 @@ where
                 }
 
                 let ping = serde_json::json!({ "type": "ping" }).to_string();
-                stdin.write_all(format!("{ping}\n").as_bytes()).await.map_err(|e| {
-                    format!("monitor_launch_agent: failed writing ping to sidecar stdin: {e}")
-                })?;
+                stdin
+                    .write_all(format!("{ping}\n").as_bytes())
+                    .await
+                    .map_err(|e| {
+                        format!("monitor_launch_agent: failed writing ping to sidecar stdin: {e}")
+                    })?;
                 stdin.flush().await.map_err(|e| {
                     format!("monitor_launch_agent: failed flushing ping to sidecar stdin: {e}")
                 })?;
@@ -754,7 +757,9 @@ mod tests {
         drop(writer);
 
         let mut lines = BufReader::new(reader).lines();
-        wait_for_sidecar_message(&mut lines, "pong", 5).await.unwrap();
+        wait_for_sidecar_message(&mut lines, "pong", 5)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

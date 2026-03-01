@@ -145,6 +145,63 @@ fn clear_workspace_state(conn: &Connection) -> Result<(), CommandError> {
     Ok(())
 }
 
+fn clear_migration_repo_contents(repo_path: &str) -> Result<(), CommandError> {
+    let trimmed = repo_path.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let path = Path::new(trimmed);
+    if !path.exists() {
+        std::fs::create_dir_all(path).map_err(|e| {
+            log::error!(
+                "workspace_reset_state: failed to recreate missing migration repo path {}: {e}",
+                path.display()
+            );
+            CommandError::from(e)
+        })?;
+        return Ok(());
+    }
+
+    if !path.is_dir() {
+        return Err(CommandError::Io(format!(
+            "Migration repo path is not a directory: {}",
+            path.display()
+        )));
+    }
+
+    for entry in std::fs::read_dir(path).map_err(|e| {
+        log::error!(
+            "workspace_reset_state: failed to read migration repo path {}: {e}",
+            path.display()
+        );
+        CommandError::from(e)
+    })? {
+        let entry = entry.map_err(CommandError::from)?;
+        let entry_path = entry.path();
+        let file_type = entry.file_type().map_err(CommandError::from)?;
+        if file_type.is_dir() {
+            std::fs::remove_dir_all(&entry_path).map_err(|e| {
+                log::error!(
+                    "workspace_reset_state: failed to remove directory {}: {e}",
+                    entry_path.display()
+                );
+                CommandError::from(e)
+            })?;
+        } else {
+            std::fs::remove_file(&entry_path).map_err(|e| {
+                log::error!(
+                    "workspace_reset_state: failed to remove file {}: {e}",
+                    entry_path.display()
+                );
+                CommandError::from(e)
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_source_type(source_type: &Option<String>) -> Result<(), CommandError> {
     match source_type.as_deref() {
         Some("sql_server") | Some("fabric_warehouse") | None => Ok(()),
@@ -1195,6 +1252,19 @@ pub fn workspace_discover_source_databases(
 pub fn workspace_reset_state(state: State<DbState>) -> Result<(), CommandError> {
     log::info!("workspace_reset_state");
     let conn = state.0.lock().unwrap();
+    let migration_repo_path: Option<String> = conn
+        .query_row(
+            "SELECT migration_repo_path FROM workspaces ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(CommandError::from)?;
+
+    if let Some(path) = migration_repo_path {
+        clear_migration_repo_contents(&path)?;
+    }
+
     clear_workspace_state(&conn)
 }
 
@@ -1248,6 +1318,8 @@ pub fn workspace_get(state: State<DbState>) -> Result<Option<Workspace>, Command
 mod tests {
     use super::*;
     use crate::db;
+    use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn create_and_get_workspace() {
@@ -1583,5 +1655,43 @@ mod tests {
         assert_eq!(table_count, 0);
         assert_eq!(procedure_count, 0);
         assert_eq!(schema_name, "finance");
+    }
+
+    #[test]
+    fn clear_migration_repo_contents_removes_all_children_and_keeps_root() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("migration-repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::create_dir_all(repo.join("models").join("silver")).unwrap();
+        fs::write(
+            repo.join(".git").join("config"),
+            "[core]\nrepositoryformatversion = 0\n",
+        )
+        .unwrap();
+        fs::write(repo.join("README.md"), "test").unwrap();
+        fs::write(
+            repo.join("models").join("silver").join("orders.sql"),
+            "select 1",
+        )
+        .unwrap();
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+
+        assert!(repo.exists());
+        assert!(repo.is_dir());
+        let entries: Vec<_> = fs::read_dir(&repo).unwrap().collect();
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn clear_migration_repo_contents_creates_missing_folder() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("missing-repo");
+        assert!(!repo.exists());
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+
+        assert!(repo.exists());
+        assert!(repo.is_dir());
     }
 }
