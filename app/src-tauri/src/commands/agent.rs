@@ -1,16 +1,19 @@
 use std::path::PathBuf;
 use std::{fs, io::Write};
+use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
 use crate::db::DbState;
 
 const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const HEARTBEAT_PONG_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct SidecarManager(Mutex<Option<PersistentSidecar>>);
 
@@ -24,6 +27,11 @@ struct PersistentSidecar {
     child: Child,
     stdin: ChildStdin,
     stdout: Lines<BufReader<ChildStdout>>,
+}
+
+#[derive(Default)]
+struct HeartbeatState {
+    awaiting_pong: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -120,13 +128,31 @@ pub async fn monitor_launch_agent(
 
     let mut aggregated = String::new();
     let mut saw_done = false;
+    let mut heartbeat = HeartbeatState::default();
 
-    while let Some(line) = proc
-        .stdout
-        .next_line()
+    while let Some(line) = {
+        match read_sidecar_line_with_heartbeat(
+            &mut proc.stdout,
+            &mut proc.stdin,
+            &mut heartbeat,
+            HEARTBEAT_INTERVAL,
+            HEARTBEAT_PONG_TIMEOUT,
+        )
         .await
-        .map_err(|e| format!("monitor_launch_agent: failed reading sidecar stdout: {e}"))?
-    {
+        {
+            Ok(next) => next,
+            Err(e) => {
+                log::error!("monitor_launch_agent: failed: {e}");
+                let _ = proc.child.kill().await;
+                *guard = None;
+                append_log_line(
+                    &log_path,
+                    &serde_json::json!({"type":"error","message":e.clone()}).to_string(),
+                )?;
+                return Err(e);
+            }
+        }
+    } {
         log::debug!("monitor_launch_agent[sidecar:stdout]: {}", line);
         append_request_scoped_sidecar_line(&log_path, request.id.as_str(), &line)?;
         emit_monitor_stream_event(&app, request.id.as_str(), &line);
@@ -153,6 +179,66 @@ pub async fn monitor_launch_agent(
         Ok("Agent run completed with no text output".to_string())
     } else {
         Ok(aggregated)
+    }
+}
+
+async fn read_sidecar_line_with_heartbeat<R, W>(
+    stdout_reader: &mut Lines<R>,
+    stdin: &mut W,
+    heartbeat: &mut HeartbeatState,
+    heartbeat_interval: Duration,
+    pong_timeout: Duration,
+) -> Result<Option<String>, String>
+where
+    R: AsyncBufRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    loop {
+        let wait_duration = if heartbeat.awaiting_pong {
+            pong_timeout
+        } else {
+            heartbeat_interval
+        };
+
+        let line_opt = match tokio::time::timeout(wait_duration, stdout_reader.next_line()).await {
+            Ok(next_line_result) => next_line_result
+                .map_err(|e| format!("monitor_launch_agent: failed reading sidecar stdout: {e}"))?,
+            Err(_) => {
+                if heartbeat.awaiting_pong {
+                    let err = format!(
+                        "monitor_launch_agent: sidecar did not emit pong within {}s",
+                        pong_timeout.as_secs()
+                    );
+                    log::error!("{err}");
+                    return Err(err);
+                }
+
+                let ping = serde_json::json!({ "type": "ping" }).to_string();
+                stdin.write_all(format!("{ping}\n").as_bytes()).await.map_err(|e| {
+                    format!("monitor_launch_agent: failed writing ping to sidecar stdin: {e}")
+                })?;
+                stdin.flush().await.map_err(|e| {
+                    format!("monitor_launch_agent: failed flushing ping to sidecar stdin: {e}")
+                })?;
+                log::info!("monitor_launch_agent: sidecar ping sent");
+                heartbeat.awaiting_pong = true;
+                continue;
+            }
+        };
+
+        let Some(line) = line_opt else {
+            return Ok(None);
+        };
+
+        if parse_message_type(&line).as_deref() == Some("pong") {
+            log::info!("monitor_launch_agent: sidecar pong received");
+            heartbeat.awaiting_pong = false;
+            continue;
+        }
+
+        // Any stream activity confirms liveness even if explicit pong was delayed.
+        heartbeat.awaiting_pong = false;
+        return Ok(Some(line));
     }
 }
 
@@ -266,7 +352,7 @@ async fn ensure_sidecar_ready(slot: &mut Option<PersistentSidecar>) -> Result<()
         .spawn()
         .map_err(|e| format!("monitor_launch_agent: failed to spawn Node sidecar: {e}"))?;
 
-    let stdin = child
+    let mut stdin = child
         .stdin
         .take()
         .ok_or_else(|| "monitor_launch_agent: missing sidecar stdin".to_string())?;
@@ -287,25 +373,28 @@ async fn ensure_sidecar_ready(slot: &mut Option<PersistentSidecar>) -> Result<()
     });
 
     let mut stdout_reader = BufReader::new(stdout).lines();
-    let mut ready_seen = false;
-    for _ in 0..50 {
-        if let Some(line) = stdout_reader.next_line().await.map_err(|e| {
-            format!("monitor_launch_agent: failed reading sidecar startup line: {e}")
-        })? {
-            log::debug!("monitor_launch_agent[sidecar:stdout]: {}", line);
-            if parse_message_type(&line).as_deref() == Some("sidecar_ready") {
-                ready_seen = true;
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-
-    if !ready_seen {
+    if let Err(e) = wait_for_sidecar_message(&mut stdout_reader, "sidecar_ready", 50).await {
         let _ = child.kill().await;
-        return Err("monitor_launch_agent: sidecar did not emit sidecar_ready".to_string());
+        return Err(e);
     }
+    log::info!("monitor_launch_agent: sidecar_ready received");
+
+    let ping = serde_json::json!({ "type": "ping" }).to_string();
+    stdin
+        .write_all(format!("{ping}\n").as_bytes())
+        .await
+        .map_err(|e| format!("monitor_launch_agent: failed writing ping to sidecar stdin: {e}"))?;
+    stdin
+        .flush()
+        .await
+        .map_err(|e| format!("monitor_launch_agent: failed flushing ping to sidecar stdin: {e}"))?;
+    log::info!("monitor_launch_agent: sidecar ping sent");
+
+    if let Err(e) = wait_for_sidecar_message(&mut stdout_reader, "pong", 20).await {
+        let _ = child.kill().await;
+        return Err(e);
+    }
+    log::info!("monitor_launch_agent: sidecar pong received");
 
     *slot = Some(PersistentSidecar {
         child,
@@ -313,6 +402,36 @@ async fn ensure_sidecar_ready(slot: &mut Option<PersistentSidecar>) -> Result<()
         stdout: stdout_reader,
     });
     Ok(())
+}
+
+async fn wait_for_sidecar_message<R>(
+    stdout_reader: &mut Lines<R>,
+    expected_type: &str,
+    max_lines: usize,
+) -> Result<(), String>
+where
+    R: AsyncBufRead + Unpin,
+{
+    for _ in 0..max_lines {
+        if let Some(line) = stdout_reader.next_line().await.map_err(|e| {
+            format!("monitor_launch_agent: failed reading sidecar startup line: {e}")
+        })? {
+            log::debug!("monitor_launch_agent[sidecar:stdout]: {}", line);
+            if parse_message_type(&line).as_deref() == Some(expected_type) {
+                return Ok(());
+            }
+        } else {
+            break;
+        }
+    }
+    log::error!(
+        "monitor_launch_agent: sidecar did not emit expected startup message: {}",
+        expected_type
+    );
+    Err(format!(
+        "monitor_launch_agent: sidecar did not emit {}",
+        expected_type
+    ))
 }
 
 fn prepare_log_path(working_directory: &str, request_id: &str) -> Result<PathBuf, String> {
@@ -515,9 +634,12 @@ fn handle_sidecar_line(
 mod tests {
     use super::{
         append_request_scoped_sidecar_line, build_request, handle_sidecar_line, parse_message_type,
-        prepare_log_path, transcript_config_line, SidecarLineResult,
+        prepare_log_path, read_sidecar_line_with_heartbeat, transcript_config_line,
+        wait_for_sidecar_message, HeartbeatState, SidecarLineResult,
     };
     use std::fs;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::time::Duration;
 
     #[test]
     fn request_serializes_api_key_and_working_directory() {
@@ -620,5 +742,114 @@ mod tests {
         let path = prepare_log_path(&working.to_string_lossy(), "req-123").unwrap();
         assert!(working.join("logs").is_dir());
         assert!(path.ends_with("agent-req-123.jsonl"));
+    }
+
+    #[tokio::test]
+    async fn wait_for_sidecar_message_detects_pong() {
+        let (mut writer, reader) = tokio::io::duplex(256);
+        writer
+            .write_all(b"{\"type\":\"sidecar_ready\"}\n{\"type\":\"pong\"}\n")
+            .await
+            .unwrap();
+        drop(writer);
+
+        let mut lines = BufReader::new(reader).lines();
+        wait_for_sidecar_message(&mut lines, "pong", 5).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn wait_for_sidecar_message_errors_when_missing_expected_type() {
+        let (mut writer, reader) = tokio::io::duplex(256);
+        writer
+            .write_all(b"{\"type\":\"sidecar_ready\"}\n{\"type\":\"agent_event\"}\n")
+            .await
+            .unwrap();
+        drop(writer);
+
+        let mut lines = BufReader::new(reader).lines();
+        let err = wait_for_sidecar_message(&mut lines, "pong", 5)
+            .await
+            .unwrap_err();
+        assert_eq!(err, "monitor_launch_agent: sidecar did not emit pong");
+    }
+
+    #[tokio::test]
+    async fn read_sidecar_line_with_heartbeat_reads_line_without_ping() {
+        let (mut stdout_writer, stdout_reader) = tokio::io::duplex(256);
+        let (mut stdin_writer, _stdin_reader) = tokio::io::duplex(256);
+        stdout_writer
+            .write_all(b"{\"type\":\"agent_response\",\"request_id\":\"r1\",\"content\":\"ok\",\"done\":false}\n")
+            .await
+            .unwrap();
+        drop(stdout_writer);
+
+        let mut lines = BufReader::new(stdout_reader).lines();
+        let mut heartbeat = HeartbeatState::default();
+        let line = read_sidecar_line_with_heartbeat(
+            &mut lines,
+            &mut stdin_writer,
+            &mut heartbeat,
+            Duration::from_millis(50),
+            Duration::from_millis(20),
+        )
+        .await
+        .unwrap();
+        assert!(line.unwrap().contains("\"type\":\"agent_response\""));
+    }
+
+    #[tokio::test]
+    async fn read_sidecar_line_with_heartbeat_sends_ping_and_accepts_pong() {
+        let (mut stdout_writer, stdout_reader) = tokio::io::duplex(256);
+        let (mut stdin_writer, stdin_reader) = tokio::io::duplex(256);
+
+        tokio::spawn(async move {
+            let mut ping_lines = BufReader::new(stdin_reader).lines();
+            let first = ping_lines.next_line().await.unwrap().unwrap();
+            assert_eq!(first, r#"{"type":"ping"}"#);
+            stdout_writer
+                .write_all(
+                    b"{\"type\":\"pong\"}\n{\"type\":\"agent_response\",\"request_id\":\"r1\",\"content\":\"ok\",\"done\":false}\n",
+                )
+                .await
+                .unwrap();
+        });
+
+        let mut lines = BufReader::new(stdout_reader).lines();
+        let mut heartbeat = HeartbeatState::default();
+        let line = read_sidecar_line_with_heartbeat(
+            &mut lines,
+            &mut stdin_writer,
+            &mut heartbeat,
+            Duration::from_millis(20),
+            Duration::from_millis(50),
+        )
+        .await
+        .unwrap();
+        assert!(line.unwrap().contains("\"type\":\"agent_response\""));
+    }
+
+    #[tokio::test]
+    async fn read_sidecar_line_with_heartbeat_errors_when_pong_missing() {
+        let (_stdout_writer, stdout_reader) = tokio::io::duplex(256);
+        let (mut stdin_writer, stdin_reader) = tokio::io::duplex(256);
+
+        tokio::spawn(async move {
+            let mut ping_lines = BufReader::new(stdin_reader).lines();
+            let first = ping_lines.next_line().await.unwrap().unwrap();
+            assert_eq!(first, r#"{"type":"ping"}"#);
+        });
+
+        let mut lines = BufReader::new(stdout_reader).lines();
+        let mut heartbeat = HeartbeatState::default();
+        let err = read_sidecar_line_with_heartbeat(
+            &mut lines,
+            &mut stdin_writer,
+            &mut heartbeat,
+            Duration::from_millis(20),
+            Duration::from_millis(20),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.contains("did not emit pong within"));
     }
 }
