@@ -116,10 +116,8 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
 
-    const repoInput = screen.getByTestId('input-repo-name');
-    await user.click(repoInput);
-    await user.type(repoInput, 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.click(screen.getByTestId('input-repo-name'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
 
     expect(apply).toBeDisabled();
 
@@ -225,8 +223,7 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
     await user.click(screen.getByTestId('input-repo-name'));
-    await user.type(screen.getByTestId('input-repo-name'), 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
     await user.click(screen.getByTestId('btn-test-connection'));
 
     await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
@@ -274,8 +271,7 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
     await user.click(screen.getByTestId('input-repo-name'));
-    await user.type(screen.getByTestId('input-repo-name'), 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
     await user.click(screen.getByTestId('btn-test-connection'));
     await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
 
@@ -339,8 +335,7 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
     await user.click(screen.getByTestId('input-repo-name'));
-    await user.type(screen.getByTestId('input-repo-name'), 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
     await user.click(screen.getByTestId('btn-test-connection'));
     await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
 

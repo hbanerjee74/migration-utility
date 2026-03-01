@@ -25,6 +25,18 @@ derives `serde::Serialize` so Tauri serialises it to the frontend as a typed err
 Map external errors at boundaries with `map_err(CommandError::from)` where possible; use custom
 message mapping only when adding user-facing context.
 
+## Database Rules
+
+- Do not hardcode source-related SQL in Rust command files.
+- All source-related SQL must live under `app/src-tauri/sql/source/<source_type>/` (organized by query intent) and be loaded only via `resolve_source_query(...)`.
+- Define foreign keys with `ON DELETE CASCADE` for app table relationships so parent deletes clean up dependent rows.
+- Exception: usage/log snapshot tables must not have foreign keys to mutable entities; they must preserve point-in-time records and remain unaffected by parent-row deletes.
+- Use parameterized SQL (`?1`, `?2`, `params![...]`) for SQLite writes; never build SQL by interpolating user input.
+- Wrap multi-table write flows in a transaction and commit once; rollback on error via normal `?` propagation.
+- For destructive reset flows, clear child tables before parent tables to satisfy foreign keys.
+- For live SQL Server tests, keep them `#[ignore]` and run explicitly with env vars documented in `docs/reference/setup-docker/README.md`.
+- Unit tests should default to `db::open_in_memory()`; do not depend on the user's local app DB.
+
 ## Testing
 
 Inline `#[cfg(test)]` tests in the same file as the command where practical. Use

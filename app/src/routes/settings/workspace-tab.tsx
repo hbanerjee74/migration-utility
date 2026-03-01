@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { Lock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
@@ -108,12 +108,9 @@ export default function WorkspaceTab() {
   const applyJobIdRef = useRef<string | null>(null);
   const applyPollerRef = useRef<number | null>(null);
 
-  const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [repoIndex, setRepoIndex] = useState<GitHubRepo[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(-1);
-  const suggestReqIdRef = useRef(0);
-  const repoSuggestionsListboxId = useId();
+  const repoIndexLoadedRef = useRef(false);
 
   useEffect(() => {
     workspaceGet()
@@ -180,43 +177,6 @@ export default function WorkspaceTab() {
     };
   }, [applying]);
 
-  useEffect(() => {
-    const query = repoName.trim();
-    if (query.length < 2) {
-      setRepoSuggestions([]);
-      setSuggestionsLoading(false);
-      return;
-    }
-
-    const requestId = ++suggestReqIdRef.current;
-    setSuggestionsLoading(true);
-    const timeoutId = setTimeout(async () => {
-      try {
-        const repos = await githubListRepos(query, 10);
-        if (requestId === suggestReqIdRef.current) {
-          setRepoSuggestions(repos);
-          setSelectedSuggestionIdx(-1);
-        }
-      } catch {
-        if (requestId === suggestReqIdRef.current) {
-          setRepoSuggestions([]);
-        }
-      } finally {
-        if (requestId === suggestReqIdRef.current) {
-          setSuggestionsLoading(false);
-        }
-      }
-    }, 250);
-
-    return () => clearTimeout(timeoutId);
-  }, [repoName]);
-
-  const showSuggestions = useMemo(
-    () => suggestionsOpen && !pageLocked && (suggestionsLoading || repoSuggestions.length > 0),
-    [suggestionsOpen, pageLocked, suggestionsLoading, repoSuggestions.length],
-  );
-  const activeSuggestionId =
-    selectedSuggestionIdx >= 0 ? `${repoSuggestionsListboxId}-option-${selectedSuggestionIdx}` : undefined;
   const resetToken = `RESET ${sourceDatabase.trim()}`;
 
   function clearWorkspaceForm() {
@@ -288,12 +248,19 @@ export default function WorkspaceTab() {
     if (typeof selected === 'string') setRepoPath(selected);
   }
 
-  function applySuggestion(repo: GitHubRepo) {
-    setRepoName(repo.fullName);
-    setRepoSelected(true);
-    setSuggestionsOpen(false);
-    setRepoSuggestions([]);
-    setSelectedSuggestionIdx(-1);
+  async function ensureRepoIndexLoaded() {
+    if (repoIndexLoadedRef.current || suggestionsLoading) return;
+    setSuggestionsLoading(true);
+    try {
+      const repos = await githubListRepos('', 100);
+      repoIndexLoadedRef.current = true;
+      setRepoIndex(repos);
+    } catch (err) {
+      logger.error('workspace repo list preload failed', err);
+      setRepoIndex([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
   }
 
   function invalidateConnectionTestState() {
@@ -774,78 +741,33 @@ export default function WorkspaceTab() {
               <Label htmlFor="repo-name">
                 Repo name <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <select
                 id="repo-name"
                 data-testid="input-repo-name"
-                type="text"
                 value={repoName}
+                onFocus={() => {
+                  void ensureRepoIndexLoaded();
+                }}
                 onChange={(e) => {
-                  setRepoName(e.target.value);
-                  setRepoSelected(false);
+                  const value = e.target.value;
+                  setRepoName(value);
+                  setRepoSelected(Boolean(value));
                 }}
-                onFocus={() => setSuggestionsOpen(true)}
-                onBlur={() => {
-                  setTimeout(() => setSuggestionsOpen(false), 120);
-                }}
-                onKeyDown={(e) => {
-                  if (!showSuggestions || repoSuggestions.length === 0) return;
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setSelectedSuggestionIdx((idx) => Math.min(idx + 1, repoSuggestions.length - 1));
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setSelectedSuggestionIdx((idx) => (idx <= 0 ? repoSuggestions.length - 1 : idx - 1));
-                  } else if (e.key === 'Enter' && selectedSuggestionIdx >= 0) {
-                    e.preventDefault();
-                    applySuggestion(repoSuggestions[selectedSuggestionIdx]);
-                  } else if (e.key === 'Escape') {
-                    setSuggestionsOpen(false);
-                    setSelectedSuggestionIdx(-1);
-                  }
-                }}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={showSuggestions}
-                aria-controls={showSuggestions ? repoSuggestionsListboxId : undefined}
-                aria-activedescendant={showSuggestions ? activeSuggestionId : undefined}
-                placeholder="owner/repo"
-                className="font-mono text-sm"
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 font-mono"
                 disabled={pageLocked}
-              />
-
-              {showSuggestions ? (
-                <ul
-                  role="listbox"
-                  id={repoSuggestionsListboxId}
-                  aria-label="Repository suggestions"
-                  className="absolute top-[66px] left-0 right-0 z-20 max-h-44 overflow-auto rounded-md border border-border bg-background shadow-sm"
-                  data-testid="repo-suggestions"
-                >
-                  {suggestionsLoading ? (
-                    <li role="status" aria-live="polite" className="px-3 py-2 text-sm text-muted-foreground">
-                      Loading repos…
-                    </li>
-                  ) : (
-                    repoSuggestions.map((repo, idx) => (
-                      <li key={repo.id} role="none">
-                        <button
-                          id={`${repoSuggestionsListboxId}-option-${idx}`}
-                          role="option"
-                          aria-selected={idx === selectedSuggestionIdx}
-                          type="button"
-                          className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-muted ${idx === selectedSuggestionIdx ? 'bg-muted' : ''}`}
-                          data-testid={`repo-suggestion-${idx}`}
-                          onMouseDown={(ev) => ev.preventDefault()}
-                          onMouseEnter={() => setSelectedSuggestionIdx(idx)}
-                          onClick={() => applySuggestion(repo)}
-                        >
-                          {repo.fullName}
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              ) : null}
+              >
+                <option value="">
+                  {suggestionsLoading ? 'Loading repositories…' : 'Select repository'}
+                </option>
+                {repoName && !repoIndex.some((repo) => repo.fullName === repoName) ? (
+                  <option value={repoName}>{repoName}</option>
+                ) : null}
+                {repoIndex.map((repo) => (
+                  <option key={repo.id} value={repo.fullName}>
+                    {repo.fullName}
+                  </option>
+                ))}
+              </select>
 
               {errors.repoName ? (
                 <p className="text-xs text-destructive" role="alert">

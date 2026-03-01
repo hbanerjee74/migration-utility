@@ -229,7 +229,7 @@ pub async fn github_list_repos(
     }
 
     let query_lc = query.to_lowercase();
-    let max = limit.unwrap_or(10).min(25);
+    let max = limit.unwrap_or(10).min(100);
     let repos = body
         .as_array()
         .ok_or_else(|| "Unexpected response format from GitHub".to_string())?

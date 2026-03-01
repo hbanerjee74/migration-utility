@@ -25,6 +25,13 @@ This is the canonical source for naming, markdown, and error-handling convention
 - Every `#[tauri::command]` logs `info!` on entry (with key params) and `error!` on failure
 - Use `thiserror` for error types; propagate with `?`
 
+## Database Query Conventions
+
+- Source-system SQL (SQL Server/Fabric discovery/import and all source-related queries) lives in `app/src-tauri/sql/source/**`, not inline in Rust logic.
+- SQLite mutations must use bound parameters, not string-concatenated SQL.
+- Schema/data changes must keep migrations and tests in sync.
+- Usage/log snapshot tables should not use foreign keys to mutable entities; keep records as immutable point-in-time data unaffected by parent deletes.
+
 ## Logging
 
 Canonical logging policy is in `.claude/rules/logging-policy.md`.
