@@ -3,23 +3,41 @@ use crate::types::CommandError;
 #[derive(Clone, Copy, Debug)]
 pub enum SourceQuery {
     DiscoverDatabases,
+    DiscoverSchemas,
+    DiscoverTables,
+    DiscoverProcedures,
 }
 
 impl SourceQuery {
     pub fn name(self) -> &'static str {
         match self {
             SourceQuery::DiscoverDatabases => "discover_databases",
+            SourceQuery::DiscoverSchemas => "discover_schemas",
+            SourceQuery::DiscoverTables => "discover_tables",
+            SourceQuery::DiscoverProcedures => "discover_procedures",
         }
     }
 }
 
-pub fn resolve_source_query(source_type: &str, query: SourceQuery) -> Result<&'static str, CommandError> {
+pub fn resolve_source_query(
+    source_type: &str,
+    query: SourceQuery,
+) -> Result<&'static str, CommandError> {
     match (source_type, query) {
         ("sql_server", SourceQuery::DiscoverDatabases) => Ok(include_str!(
             "../sql/source/sql_server/discover_databases.sql"
         )),
         ("fabric_warehouse", SourceQuery::DiscoverDatabases) => Ok(include_str!(
             "../sql/source/fabric_warehouse/discover_databases.sql"
+        )),
+        ("sql_server", SourceQuery::DiscoverSchemas) => Ok(include_str!(
+            "../sql/source/sql_server/discover_schemas.sql"
+        )),
+        ("sql_server", SourceQuery::DiscoverTables) => {
+            Ok(include_str!("../sql/source/sql_server/discover_tables.sql"))
+        }
+        ("sql_server", SourceQuery::DiscoverProcedures) => Ok(include_str!(
+            "../sql/source/sql_server/discover_procedures.sql"
         )),
         _ => Err(CommandError::Io(format!(
             "Unsupported source query lookup: source_type={source_type}, query={}",
@@ -68,9 +86,23 @@ mod tests {
     }
 
     #[test]
+    fn resolves_sql_server_source_inventory_queries() {
+        let schemas = resolve_source_query("sql_server", SourceQuery::DiscoverSchemas).unwrap();
+        assert!(schemas.contains("sys.schemas"));
+
+        let tables = resolve_source_query("sql_server", SourceQuery::DiscoverTables).unwrap();
+        assert!(tables.contains("sys.tables"));
+
+        let procedures =
+            resolve_source_query("sql_server", SourceQuery::DiscoverProcedures).unwrap();
+        assert!(procedures.contains("sys.procedures"));
+    }
+
+    #[test]
     #[ignore = "requires reachable SQL Server (e.g. Docker)"]
     fn discover_databases_query_executes_against_real_sql_server() {
-        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
         let port: u16 = std::env::var("MIGRATION_TEST_SQL_SERVER_PORT")
             .ok()
             .and_then(|v| v.parse::<u16>().ok())
@@ -126,7 +158,9 @@ mod tests {
                 "expected at least one accessible database in query result"
             );
             assert!(
-                names.iter().any(|n| n.eq_ignore_ascii_case("WideWorldImportersDW")),
+                names
+                    .iter()
+                    .any(|n| n.eq_ignore_ascii_case("WideWorldImportersDW")),
                 "expected WideWorldImportersDW to be discoverable; got: {names:?}"
             );
         });

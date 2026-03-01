@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -6,6 +6,23 @@ import WorkspaceTab from '../../routes/settings/workspace-tab';
 import { makeWorkspace } from '../../test/fixtures';
 import { mockInvoke, mockInvokeCommands, resetTauriMocks } from '../../test/mocks/tauri';
 import { useWorkflowStore } from '../../stores/workflow-store';
+
+type ApplyProgressPayload = {
+  stage: string;
+  percent: number;
+  message: string;
+};
+
+let applyProgressListener: ((event: { payload: ApplyProgressPayload }) => void) | null = null;
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn((_name: string, handler: (event: { payload: ApplyProgressPayload }) => void) => {
+    applyProgressListener = handler;
+    return Promise.resolve(() => {
+      applyProgressListener = null;
+    });
+  }),
+}));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn().mockResolvedValue('/selected/path'),
@@ -22,10 +39,12 @@ function renderPage() {
 describe('WorkspaceTab (Settings)', () => {
   beforeEach(() => {
     resetTauriMocks();
+    applyProgressListener = null;
     mockInvokeCommands({
       workspace_get: null,
       github_list_repos: [],
       workspace_apply_and_clone: makeWorkspace(),
+      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks', 'master'],
       workspace_reset_state: undefined,
@@ -82,6 +101,7 @@ describe('WorkspaceTab (Settings)', () => {
     mockInvokeCommands({
       workspace_get: null,
       workspace_apply_and_clone: makeWorkspace(),
+      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -184,6 +204,7 @@ describe('WorkspaceTab (Settings)', () => {
     mockInvokeCommands({
       workspace_get: null,
       workspace_apply_and_clone: makeWorkspace({ migrationRepoName: 'acme/data-platform' }),
+      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -213,6 +234,67 @@ describe('WorkspaceTab (Settings)', () => {
       expect(screen.getByTestId('btn-apply')).toBeDisabled();
       expect(screen.getByTestId('btn-test-connection')).toBeDisabled();
       expect(screen.getByTestId('btn-pick-repo-path')).toBeDisabled();
+    });
+  });
+
+  it('shows apply progress and allows cancel while apply is running', async () => {
+    const user = userEvent.setup();
+    const applyWorkspace = makeWorkspace({ migrationRepoName: 'acme/data-platform' });
+    let resolveApply!: (value: typeof applyWorkspace) => void;
+    const applyPromise = new Promise<typeof applyWorkspace>((resolve) => {
+      resolveApply = resolve;
+    });
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'workspace_get') return Promise.resolve(null);
+      if (cmd === 'github_list_repos')
+        return Promise.resolve([{ id: 1, fullName: 'acme/data-platform', private: true }]);
+      if (cmd === 'workspace_test_source_connection') return Promise.resolve('Connection successful');
+      if (cmd === 'workspace_discover_source_databases') return Promise.resolve(['AdventureWorks']);
+      if (cmd === 'workspace_apply_and_clone') return applyPromise;
+      if (cmd === 'workspace_cancel_apply') return Promise.resolve(undefined);
+      if (cmd === 'workspace_reset_state') return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unmocked command: ${cmd}`));
+    });
+
+    renderPage();
+
+    await user.type(screen.getByTestId('input-source-server'), 'sql.acme.local');
+    await user.type(screen.getByTestId('input-source-username'), 'sa');
+    await user.type(screen.getByTestId('input-source-password'), 'secret');
+    await user.click(screen.getByTestId('btn-pick-repo-path'));
+    await user.click(screen.getByTestId('input-repo-name'));
+    await user.type(screen.getByTestId('input-repo-name'), 'ac');
+    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.click(screen.getByTestId('btn-test-connection'));
+    await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
+
+    await user.click(screen.getByTestId('btn-apply'));
+
+    await act(async () => {
+      applyProgressListener?.({
+        payload: {
+          stage: 'importing_tables',
+          percent: 65,
+          message: 'Importing source tables...',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-apply-progress')).toHaveTextContent(
+        'Importing source tables...',
+      );
+      expect(screen.getByTestId('btn-cancel-apply')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('btn-cancel-apply'));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('workspace_cancel_apply');
+    });
+
+    await act(async () => {
+      resolveApply(applyWorkspace);
     });
   });
 

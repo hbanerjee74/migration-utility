@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { Lock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
@@ -12,11 +13,12 @@ import {
   workspaceDiscoverSourceDatabases,
   githubListRepos,
   workspaceApplyAndClone,
+  workspaceCancelApply,
   workspaceGet,
   workspaceResetState,
   workspaceTestSourceConnection,
 } from '@/lib/tauri';
-import type { GitHubRepo } from '@/lib/types';
+import type { GitHubRepo, WorkspaceApplyProgressEvent } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
 const DEFAULT_WORKSPACE_NAME = 'Migration Workspace';
@@ -98,7 +100,10 @@ export default function WorkspaceTab() {
   const [connectionTestPassed, setConnectionTestPassed] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccessMessage, setApplySuccessMessage] = useState<string | null>(null);
+  const [applyProgressMessage, setApplyProgressMessage] = useState<string | null>(null);
+  const [applyProgressPercent, setApplyProgressPercent] = useState<number>(0);
   const [resetError, setResetError] = useState<string | null>(null);
+  const cancelApplyRef = useRef(false);
 
   const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -136,6 +141,21 @@ export default function WorkspaceTab() {
   }, [setWorkspaceId]);
 
   const pageLocked = isLocked || isConfigured;
+
+  useEffect(() => {
+    if (!applying) return;
+    let unlisten: (() => void) | null = null;
+    void listen<WorkspaceApplyProgressEvent>('workspace-apply-progress', (event) => {
+      setApplyProgressMessage(event.payload.message);
+      setApplyProgressPercent(event.payload.percent);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [applying]);
 
   useEffect(() => {
     const query = repoName.trim();
@@ -272,8 +292,11 @@ export default function WorkspaceTab() {
     const sourcePasswordValue = sourcePassword.trim();
 
     setApplying(true);
+    cancelApplyRef.current = false;
     setApplyError(null);
     setApplySuccessMessage(null);
+    setApplyProgressMessage('Starting apply...');
+    setApplyProgressPercent(5);
     try {
       const ws = await workspaceApplyAndClone({
         name: workspaceName.trim() || DEFAULT_WORKSPACE_NAME,
@@ -296,12 +319,34 @@ export default function WorkspaceTab() {
       setWorkspaceName(ws.displayName);
       setIsConfigured(true);
       setApplySuccessMessage('Workspace applied successfully. Repository cloned locally.');
+      setApplyProgressMessage(null);
+      setApplyProgressPercent(100);
       logger.info('workspace: applied and repo cloned');
     } catch (err) {
-      logger.error('workspace apply failed', err);
-      setApplyError(getErrorMessage(err));
+      const message = getErrorMessage(err);
+      if (cancelApplyRef.current || message.toLowerCase().includes('cancelled')) {
+        logger.info('workspace apply cancelled by user');
+        setApplyError('Apply cancelled. No source settings were committed.');
+      } else {
+        logger.error('workspace apply failed', err);
+        setApplyError(message);
+      }
+      setApplyProgressMessage(null);
+      setApplyProgressPercent(0);
     } finally {
       setApplying(false);
+      cancelApplyRef.current = false;
+    }
+  }
+
+  async function handleCancelApply() {
+    cancelApplyRef.current = true;
+    try {
+      await workspaceCancelApply();
+      setApplyProgressMessage('Cancelling apply...');
+    } catch (err) {
+      logger.error('workspace apply cancel failed', err);
+      setApplyError(getErrorMessage(err));
     }
   }
 
@@ -800,6 +845,18 @@ export default function WorkspaceTab() {
             {applySuccessMessage}
           </p>
         ) : null}
+        {applying && applyProgressMessage ? (
+          <div className="flex flex-col gap-1" data-testid="workspace-apply-progress">
+            <p className="text-xs text-muted-foreground">{applyProgressMessage}</p>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${applyProgressPercent}%` }}
+                data-testid="workspace-apply-progress-bar"
+              />
+            </div>
+          </div>
+        ) : null}
         {resetError ? (
           <p className="text-xs text-destructive" role="alert" data-testid="workspace-reset-error">
             {resetError}
@@ -816,6 +873,17 @@ export default function WorkspaceTab() {
           >
             {applying ? 'Applying…' : 'Apply'}
           </Button>
+          {applying ? (
+            <Button
+              type="button"
+              data-testid="btn-cancel-apply"
+              onClick={() => void handleCancelApply()}
+              variant="outline"
+              size="sm"
+            >
+              Cancel
+            </Button>
+          ) : null}
         </div>
 
         <Card className="gap-0 py-5 border-destructive/40" data-testid="settings-workspace-danger-zone">

@@ -56,6 +56,20 @@ export interface ApplyWorkspaceArgs {
   sourceTrustServerCertificate?: boolean | null;
 }
 
+export interface WorkspaceApplyProgressEvent {
+  stage:
+    | 'validating_source_access'
+    | 'verifying_repo'
+    | 'importing_schemas'
+    | 'importing_tables'
+    | 'importing_procedures'
+    | 'persisting_workspace'
+    | 'importing_source_metadata'
+    | 'completed';
+  percent: number;
+  message: string;
+}
+
 export interface AppSettings {
   anthropicApiKey: string | null;
   githubOauthToken: string | null;

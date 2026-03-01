@@ -9,6 +9,7 @@ import type {
   UsageRun,
   UsageRunDetail,
   UsageSummary,
+  WorkspaceApplyProgressEvent,
   Workspace,
 } from './types';
 
@@ -33,8 +34,13 @@ export const workspaceGet = () =>
 export const workspaceApplyAndClone = (args: ApplyWorkspaceArgs) =>
   invoke<Workspace>('workspace_apply_and_clone', { args });
 
+export const workspaceCancelApply = () =>
+  invoke<void>('workspace_cancel_apply');
+
 export const workspaceResetState = () =>
   invoke<void>('workspace_reset_state');
+
+export type { WorkspaceApplyProgressEvent };
 
 export const workspaceTestSourceConnection = (args: {
   sourceType: 'sql_server' | 'fabric_warehouse';

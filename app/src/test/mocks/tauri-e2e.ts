@@ -9,6 +9,7 @@
 const mockResponses: Record<string, unknown> = {
   // Workspace
   workspace_apply_and_clone: undefined,
+  workspace_cancel_apply: undefined,
   workspace_test_source_connection: "Connection successful",
   workspace_discover_source_databases: ["master"],
   workspace_reset_state: undefined,
