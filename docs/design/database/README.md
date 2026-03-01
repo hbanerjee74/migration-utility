@@ -101,6 +101,9 @@ SELECT table_schema, table_name FROM INFORMATION_SCHEMA.TABLES
 | `schema_name` | TEXT NOT NULL → `warehouse_schemas` | `INFORMATION_SCHEMA.TABLES.TABLE_SCHEMA` |
 | `table_name` | TEXT NOT NULL | `INFORMATION_SCHEMA.TABLES.TABLE_NAME` |
 | `object_id_local` | INTEGER | `sys.objects.object_id` — DB-scoped, not portable |
+| `row_count_estimate` | INTEGER | Estimated table row count from profiler/import scan |
+| `avg_daily_row_change_7d` | REAL | Average daily row change over trailing 7-day window |
+| `pk_columns_json` | TEXT | JSON array of primary key columns (empty if unknown) |
 
 PK: `(warehouse_item_id, schema_name, table_name)`
 
@@ -210,10 +213,15 @@ Agent-suggested, FDE-confirmed settings per selected table (table config step).
 | `load_strategy` | TEXT | `incremental \| full_refresh \| snapshot` — how dbt loads it |
 | `grain_columns` | TEXT | JSON array — columns that define row uniqueness (dbt `unique_key`) |
 | `relationships_json` | TEXT | JSON array: `[{column, ref_table, ref_column}]` |
-| `incremental_column` | TEXT | Watermark column for detecting new/changed rows |
-| `date_column` | TEXT | Business event date for partition pruning and snapshot periods |
+| `incremental_column` | TEXT | CDC/watermark column for detecting new/changed rows |
+| `date_column` | TEXT | Canonical business date for partition pruning and fixture sampling |
 | `snapshot_strategy` | TEXT NOT NULL DEFAULT `sample_1day` | `sample_1day \| full \| full_flagged` |
 | `pii_columns` | TEXT | JSON array of column names |
+| `scd_type` | TEXT | `none \| type1 \| type2` for dimension handling |
+| `scd_natural_key_columns` | TEXT | JSON array of natural key columns for SCD |
+| `scd_effective_from_column` | TEXT | Effective start timestamp/date column (Type 2) |
+| `scd_effective_to_column` | TEXT | Effective end timestamp/date column (Type 2) |
+| `scd_is_current_column` | TEXT | Current-row marker column (Type 2) |
 | `confirmed_at` | TEXT | ISO 8601 timestamp — null until FDE confirms |
 
 ## Design Notes
@@ -249,8 +257,15 @@ Agent-suggested, FDE-confirmed settings per selected table (table config step).
   event date used for partition pruning and defining snapshot periods — often different from
   the watermark column.
 
+- **Table profiling fields on `warehouse_tables`** — `row_count_estimate`,
+  `avg_daily_row_change_7d`, and `pk_columns_json` are source-derived profiling metadata used by
+  Scope and fixture planning. They are not FDE decisions.
+
 - **`grain_columns`** — JSON array of column names that together define a unique row. Maps
   directly to dbt's `unique_key` config. Null until the agent proposes it.
 
 - **`relationships_json`** — JSON array of `{column, ref_table, ref_column}` objects. Captures
   the FK relationships the agent infers from the stored procedure's JOIN patterns.
+
+- **SCD fields on `table_config`** — SCD behavior is an FDE-confirmed migration decision, so
+  `scd_type` and related SCD columns are stored with table config rather than source metadata.

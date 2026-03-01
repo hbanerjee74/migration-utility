@@ -73,30 +73,50 @@
     }
 
     /* ── Outer chrome ───────────────────────────────── */
+    .mockup-shell {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 16px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .switcher-panel {
+      width: 240px;
+      background: #F7F7F8;
+      border: 1px solid #D4D4D8;
+      border-radius: 10px;
+      padding: 12px;
+      flex-shrink: 0;
+    }
+    body.dark .switcher-panel {
+      background: #222227;
+      border-color: #3A3A40;
+    }
     .scene-label {
-      text-align: center;
+      text-align: left;
       font-size: 12px;
       font-weight: 600;
       letter-spacing: .07em;
       text-transform: uppercase;
       color: #888;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     .switcher {
       display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: stretch;
       gap: 6px;
-      margin-bottom: 28px;
+      margin: 0;
     }
     .sw-btn {
       font-family: var(--font-sans);
       font-size: 12px;
       font-weight: 500;
-      padding: 5px 14px;
-      border-radius: 999px;
+      text-align: left;
+      padding: 6px 10px;
+      border-radius: 8px;
       border: 1px solid #CCC;
       background: #FFF;
       color: #555;
@@ -112,7 +132,7 @@
       display: flex;
       width: 960px;
       height: 640px;
-      margin: 0 auto;
+      margin: 0;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0,0,0,.2), 0 4px 12px rgba(0,0,0,.1);
@@ -327,40 +347,94 @@
 
     /* ═══════════════════════════════════════════════
        SURFACE: SCOPE
-       Left stepper + right content split
+       Three dedicated tab mockups (no left workflow rail)
     ═══════════════════════════════════════════════ */
-    .scope-layout {
-      display: flex; gap: 20px; height: 100%;
+    .scope-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 10px;
     }
-    .scope-steps {
-      width: 168px; flex-shrink: 0;
+    .scope-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
-    .scope-step {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 10px 8px; border-radius: var(--radius-sm);
-      cursor: pointer; position: relative;
+    .scope-tabbar {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
     }
-    .scope-step + .scope-step::before {
-      content: '';
-      position: absolute; top: 0; left: 20px;
-      width: 1px; height: 10px;
-      background: var(--border);
+    .scope-tab {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--fg-muted);
+      border-bottom: 2px solid transparent;
+      font-weight: 500;
     }
-    .scope-step.done  { }
-    .scope-step.active { background: var(--pacific-10); }
-    .scope-step.locked { opacity: .45; pointer-events: none; }
-    .step-icon {
-      width: 22px; height: 22px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; margin-top: 1px;
+    .scope-tab.active {
+      color: var(--pacific);
+      border-bottom-color: var(--pacific);
+      background: var(--pacific-10);
+      border-radius: 6px 6px 0 0;
     }
-    .step-icon.done   { background: var(--seafoam);    color: #fff; }
-    .step-icon.active { background: var(--pacific);    color: #fff; }
-    .step-icon.locked { background: var(--bg-muted);   color: var(--fg-subtle); border: 1px solid var(--border); }
-    .step-label { font-size: 14px; font-weight: 500; }
-    .step-meta  { font-size: 12px; color: var(--fg-muted); margin-top: 1px; }
-
-    .scope-panel { flex: 1; }
+    .scope-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 512px;
+    }
+    .scope-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
+    }
+    .scope-table-head, .scope-table-row {
+      display: grid;
+      grid-template-columns: 24px 1.3fr .8fr .7fr .9fr;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .scope-table-head {
+      color: var(--fg-muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .scope-table-row + .scope-table-row { border-top: 1px solid var(--border); }
+    .scope-schema-row {
+      padding: 7px 10px;
+      font-size: 12px;
+      color: var(--fg-muted);
+      background: var(--bg-muted);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .kv-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .kv-field p:first-child {
+      font-size: 11px;
+      color: var(--fg-muted);
+      margin-bottom: 4px;
+    }
+    .kv-pill {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--fg);
+      background: var(--bg-card);
+    }
 
     /* ═══════════════════════════════════════════════
        SURFACE: MONITOR
@@ -396,20 +470,27 @@
 </head>
 <body>
 
-  <!-- Surface switcher (simulates clicking icon nav) -->
-  <div class="scene-label">Surface</div>
-  <div class="switcher">
-    <button class="sw-btn on"  onclick="show('home', this); homeState('setup')">Home — Setup</button>
-    <button class="sw-btn"     onclick="show('home', this); homeState('empty')">Home — Ready</button>
-    <button class="sw-btn"     onclick="show('home', this); homeState('active')">Home — Active</button>
-    <button class="sw-btn"     onclick="show('scope', this); scopeLock(false)">Scope</button>
-    <button class="sw-btn"     onclick="show('scope', this); scopeLock(true)">Scope — Locked</button>
-    <button class="sw-btn"     onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
-    <button class="sw-btn"     onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
-    <button class="sw-btn"     onclick="show('settings', this); settingsTab('connections')">Settings</button>
-    <button class="sw-btn theme on" id="theme-light" onclick="setTheme('light')">Theme: Light</button>
-    <button class="sw-btn theme" id="theme-dark" onclick="setTheme('dark')">Theme: Dark</button>
-  </div>
+  <div class="mockup-shell">
+    <!-- Surface switcher (simulates clicking icon nav) -->
+    <aside class="switcher-panel">
+      <div class="scene-label">Surface</div>
+      <div class="switcher">
+        <button class="sw-btn on"  onclick="show('home', this); homeState('setup')">Home — Setup</button>
+        <button class="sw-btn"     onclick="show('home', this); homeState('empty')">Home — Ready</button>
+        <button class="sw-btn"     onclick="show('home', this); homeState('active')">Home — Active</button>
+        <button class="sw-btn"     onclick="show('scope-select', this, 'scope')">Scope — Tab 1</button>
+        <button class="sw-btn"     onclick="show('scope-details', this, 'scope')">Scope — Tab 2</button>
+        <button class="sw-btn"     onclick="show('scope-final', this, 'scope')">Scope — Tab 3</button>
+        <button class="sw-btn" id="sw-monitor-ready"   onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
+        <button class="sw-btn" id="sw-monitor-running" onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
+        <button class="sw-btn"     onclick="show('settings-connections', this, 'settings')">Settings — Connections</button>
+        <button class="sw-btn"     onclick="show('settings-workspace', this, 'settings')">Settings — Workspace</button>
+        <button class="sw-btn"     onclick="show('settings-reset', this, 'settings')">Settings — Reset</button>
+        <button class="sw-btn"     onclick="show('settings-usage', this, 'settings')">Settings — Usage</button>
+        <button class="sw-btn theme on" id="theme-light" onclick="setTheme('light')">Theme: Light</button>
+        <button class="sw-btn theme" id="theme-dark" onclick="setTheme('dark')">Theme: Dark</button>
+      </div>
+    </aside>
 
   <div class="app">
 
@@ -428,7 +509,7 @@
       </div>
 
       <!-- Scope -->
-      <div class="nav-item" id="nav-scope" data-tip="Scope" onclick="show('scope', null)">
+      <div class="nav-item" id="nav-scope" data-tip="Scope" onclick="show('scope-select', null, 'scope')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
       </div>
 
@@ -440,7 +521,7 @@
       <div class="nav-spacer"></div>
 
       <!-- Settings -->
-      <div class="nav-item" id="nav-settings" data-tip="Settings" onclick="show('settings', null)">
+      <div class="nav-item" id="nav-settings" data-tip="Settings" onclick="show('settings-connections', null, 'settings')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </div>
 
@@ -473,7 +554,7 @@
               <p class="text-sm text-muted" style="text-align:center; line-height:1.6; max-width:300px;">
                 Connect GitHub, add your Anthropic API key, and configure your Fabric workspace before starting a migration.
               </p>
-              <button class="btn btn-primary mt8" onclick="show('settings', null); settingsTab('connections')">
+              <button class="btn btn-primary mt8" onclick="show('settings-connections', null, 'settings')">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                 Go to Settings
               </button>
@@ -544,7 +625,7 @@
             </div>
 
             <div class="mt16" style="display:flex; justify-content:flex-end;">
-              <button class="btn btn-primary" onclick="show('scope', null)">
+              <button class="btn btn-primary" onclick="show('scope-select', null, 'scope')">
                 Continue: Table config
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
@@ -610,7 +691,7 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                     Open Monitor
                   </button>
-                  <button class="btn btn-outline" style="width:100%; justify-content:flex-start;" onclick="show('scope', null)">
+                  <button class="btn btn-outline" style="width:100%; justify-content:flex-start;" onclick="show('scope-select', null, 'scope')">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
                     Review Scope
                   </button>
@@ -628,122 +709,212 @@
         </div>
 
         <!-- ════════════════════════════════════
-             SCOPE SURFACE
+             SCOPE SURFACE — TAB 1
         ════════════════════════════════════ -->
-        <div id="surface-scope" class="surface">
+        <div id="surface-scope-select" class="surface">
+          <div class="section-label">Scope — Table-first functional selection</div>
+          <div class="scope-shell">
+            <div class="scope-header">
+              <div class="scope-summary">
+                <span class="chip chip-blue">14 tables selected</span>
+                <span class="text-xs text-muted">Saved 2m ago</span>
+              </div>
+              <button class="btn btn-outline btn-sm">Reset selection</button>
+            </div>
 
-          <!-- Locked banner (shown after migration launches) -->
-          <div id="scope-locked-banner" style="display:none; margin-bottom:12px; padding:8px 12px; background:color-mix(in oklch, var(--amber), transparent 88%); border:1px solid color-mix(in oklch, var(--amber), transparent 65%); border-radius:var(--radius-sm); display:none;">
-            <div class="row gap8">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <span class="text-sm" style="color:var(--amber); font-weight:500;">Migration is running — scope is read-only</span>
-              <span class="text-xs text-muted" style="margin-left:4px;">Go to Monitor to track progress</span>
+            <div class="scope-tabbar">
+              <div class="scope-tab active">1. Select Tables</div>
+              <div class="scope-tab">2. Table Details</div>
+              <div class="scope-tab">3. Final Scope</div>
+            </div>
+
+            <div class="card" style="overflow-y:auto; flex:1;">
+              <div class="row between" style="padding:10px; border-bottom:1px solid var(--border);">
+                <input class="input input-sm" style="width:220px;" value="Search tables..." />
+                <div class="row gap8">
+                  <button class="btn btn-outline btn-sm">Schema: All</button>
+                  <button class="btn btn-outline btn-sm">Only selected</button>
+                  <button class="btn btn-outline btn-sm">Select all</button>
+                </div>
+              </div>
+              <div class="scope-table-head">
+                <span></span><span>Name</span><span>Schema</span><span>Rows</span><span>7d Δ/day</span>
+              </div>
+              <div class="scope-schema-row"><span>dbo</span><span class="text-xs">Select all (12)</span></div>
+              <div class="scope-table-row">
+                <input type="checkbox" checked />
+                <span class="font-mono">fact_sales</span>
+                <span class="font-mono text-muted">dbo</span>
+                <span class="font-mono text-muted">12.4M</span>
+                <span class="font-mono text-muted">+182K</span>
+              </div>
+              <div class="scope-table-row">
+                <input type="checkbox" checked />
+                <span class="font-mono">dim_customer</span>
+                <span class="font-mono text-muted">dbo</span>
+                <span class="font-mono text-muted">1.1M</span>
+                <span class="font-mono text-muted">+2.1K</span>
+              </div>
+              <div class="scope-table-row">
+                <input type="checkbox" />
+                <span class="font-mono">dim_product</span>
+                <span class="font-mono text-muted">dbo</span>
+                <span class="font-mono text-muted">85K</span>
+                <span class="font-mono text-muted">+90</span>
+              </div>
+              <div class="scope-schema-row"><span>reporting</span><span class="text-xs">Select all (4)</span></div>
+              <div class="scope-table-row">
+                <input type="checkbox" checked />
+                <span class="font-mono">gold_summary</span>
+                <span class="font-mono text-muted">reporting</span>
+                <span class="font-mono text-muted">420K</span>
+                <span class="font-mono text-muted">+6.2K</span>
+              </div>
             </div>
           </div>
+        </div><!-- /surface-scope-select -->
 
-          <div class="scope-layout" id="scope-content">
-
-            <!-- Step list -->
-            <div class="scope-steps">
-              <div class="section-label" style="padding: 0 8px;">Steps</div>
-
-              <div class="scope-step done">
-                <div class="step-icon done">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-                <div><p class="step-label">Scope</p><p class="step-meta">14 tables</p></div>
+        <!-- ════════════════════════════════════
+             SCOPE SURFACE — TAB 2
+        ════════════════════════════════════ -->
+        <div id="surface-scope-details" class="surface">
+          <div class="section-label">Scope — Table details capture</div>
+          <div class="scope-shell">
+            <div class="scope-header">
+              <div class="scope-summary">
+                <span class="chip chip-blue">9 / 14 tables ready</span>
+                <span class="text-xs text-muted">Needs details for 5 tables</span>
               </div>
-
-              <div class="scope-step done">
-                <div class="step-icon done">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-                <div><p class="step-label">Candidacy</p><p class="step-meta">22 migrate</p></div>
-              </div>
-
-              <div class="scope-step active">
-                <div class="step-icon active">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                </div>
-                <div><p class="step-label" style="color:var(--pacific);">Table Config</p><p class="step-meta">9 / 14 confirmed</p></div>
-              </div>
+              <button class="btn btn-outline btn-sm">Bulk apply defaults</button>
             </div>
 
-            <!-- Step content panel -->
-            <div class="scope-panel">
-              <div class="section-label">Table Config — Confirm per-table settings</div>
+            <div class="scope-tabbar">
+              <div class="scope-tab">1. Select Tables</div>
+              <div class="scope-tab active">2. Table Details</div>
+              <div class="scope-tab">3. Final Scope</div>
+            </div>
 
-              <!-- master-detail: left list -->
-              <div style="display:grid; grid-template-columns: 180px 1fr; gap:12px; height:460px;">
-                <div class="card" style="overflow-y:auto;">
-                  <div style="padding:8px;">
-                    <div style="padding: 6px 10px; border-radius:6px; background:var(--pacific-10); border-left:2px solid var(--pacific); margin-bottom:4px;">
-                      <p class="text-sm font-medium" style="color:var(--pacific);">fact_sales</p>
-                      <p class="text-xs text-muted">dbo</p>
-                    </div>
-                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
-                      <p class="text-sm font-medium">dim_customer</p>
-                      <p class="text-xs" style="color:var(--seafoam);">✓ confirmed</p>
-                    </div>
-                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
-                      <p class="text-sm font-medium">dim_product</p>
-                      <p class="text-xs" style="color:var(--seafoam);">✓ confirmed</p>
-                    </div>
-                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
-                      <p class="text-sm font-medium">silver_revenue</p>
-                      <p class="text-xs text-muted">not started</p>
-                    </div>
-                    <div style="padding: 6px 10px; border-radius:6px; margin-bottom:4px;">
-                      <p class="text-sm font-medium">gold_summary</p>
-                      <p class="text-xs text-muted">not started</p>
-                    </div>
+            <div class="scope-grid" style="flex:1;">
+              <div class="card" style="overflow-y:auto;">
+                <div class="scope-table-head">
+                  <span></span><span>Name</span><span>Schema</span><span>Rows</span><span>Status</span>
+                </div>
+                <div class="scope-table-row" style="background:var(--pacific-10); border-top:none;">
+                  <input type="radio" checked />
+                  <span class="font-mono">fact_sales</span>
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono text-muted">12.4M</span>
+                  <span class="chip chip-green">Ready</span>
+                </div>
+                <div class="scope-table-row">
+                  <input type="radio" />
+                  <span class="font-mono">dim_customer</span>
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono text-muted">1.1M</span>
+                  <span class="chip chip-amber">Missing SCD</span>
+                </div>
+                <div class="scope-table-row">
+                  <input type="radio" />
+                  <span class="font-mono">gold_summary</span>
+                  <span class="font-mono text-muted">reporting</span>
+                  <span class="font-mono text-muted">420K</span>
+                  <span class="chip chip-amber">Missing PK</span>
+                </div>
+              </div>
+
+              <div class="card card-p" style="overflow-y:auto;">
+                <div class="row between mb8">
+                  <div>
+                    <p class="text-sm font-semibold font-mono">dbo.fact_sales</p>
+                    <p class="text-xs text-muted mt4">Migration metadata required for build + tests</p>
                   </div>
                 </div>
 
-                <!-- detail form -->
-                <div class="card card-p" style="overflow-y:auto;">
-                  <div class="row between mb8">
-                    <div>
-                      <p class="text-base font-semibold font-mono">fact_sales</p>
-                      <p class="text-xs text-muted mt4">dbo · usp_load_fact_sales</p>
-                    </div>
-                    <button class="btn btn-primary btn-sm">Confirm →</button>
-                  </div>
-                  <hr style="margin: 12px 0; border-color: var(--border);" />
-                  <div style="display:flex; flex-direction:column; gap:14px;">
-                    <div>
-                      <p class="text-xs text-muted mb8">Table type</p>
-                      <div style="display:flex; gap:6px;">
-                        <div style="padding:5px 12px; border-radius:999px; background:var(--pacific); color:#fff; font-size:12px; font-weight:500; cursor:pointer;">Fact</div>
-                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted); cursor:pointer;">Dimension</div>
-                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted); cursor:pointer;">Other</div>
-                      </div>
-                    </div>
-                    <div>
-                      <p class="text-xs text-muted mb8">Snapshot strategy <span style="font-size:10px; background:var(--pacific-10); color:var(--pacific); padding:1px 6px; border-radius:3px; margin-left:4px;">AI suggested</span></p>
-                      <div style="display:flex; gap:6px;">
-                        <div style="padding:5px 12px; border-radius:999px; background:var(--pacific); color:#fff; font-size:12px; font-weight:500;">1-day sample</div>
-                        <div style="padding:5px 12px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--fg-muted);">Full copy</div>
-                      </div>
-                    </div>
-                    <div>
-                      <p class="text-xs text-muted mb8">Incremental column <span style="font-size:10px; background:var(--pacific-10); color:var(--pacific); padding:1px 6px; border-radius:3px; margin-left:4px;">AI suggested</span></p>
-                      <div style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border:1px solid var(--pacific); border-radius:6px; font-size:12px; font-family:var(--font-mono);">load_date <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-                    </div>
-                    <div>
-                      <p class="text-xs text-muted mb8">PII columns</p>
-                      <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; background:var(--amber-10); border:1px solid var(--amber-border); border-radius:999px; font-size: 12px; font-family:var(--font-mono);">customer_email <span style="cursor:pointer; color:var(--fg-muted);">×</span></div>
-                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; background:var(--amber-10); border:1px solid var(--amber-border); border-radius:999px; font-size: 12px; font-family:var(--font-mono);">customer_phone <span style="cursor:pointer; color:var(--fg-muted);">×</span></div>
-                        <div style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px dashed var(--border); border-radius:999px; font-size: 12px; color:var(--fg-muted); cursor:pointer;">+ add column</div>
-                      </div>
-                    </div>
-                  </div>
+                <div class="kv-grid">
+                  <div class="kv-field"><p>Table type</p><div class="kv-pill">fact</div></div>
+                  <div class="kv-field"><p>Load strategy</p><div class="kv-pill">incremental</div></div>
+                  <div class="kv-field"><p>CDC column</p><div class="kv-pill">load_date</div></div>
+                  <div class="kv-field"><p>Canonical date column</p><div class="kv-pill">sale_date</div></div>
+                  <div class="kv-field"><p>PK columns</p><div class="kv-pill">["sale_id"]</div></div>
+                  <div class="kv-field"><p>Grain columns</p><div class="kv-pill">["sale_id"]</div></div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <p class="text-xs text-muted mb8">Relationships (required for tests)</p>
+                  <div class="kv-pill">[{"column":"customer_id","ref_table":"dim_customer","ref_column":"customer_id"}]</div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <p class="text-xs text-muted mb8">PII columns (required for fixture masking)</p>
+                  <div class="kv-pill">["customer_email","customer_phone"]</div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <p class="text-xs text-muted mb8">SCD (dimensions only)</p>
+                  <div class="kv-pill">scd_type=none</div>
                 </div>
               </div>
             </div>
-          </div><!-- /scope-content -->
-        </div><!-- /surface-scope -->
+          </div>
+        </div><!-- /surface-scope-details -->
+
+        <!-- ════════════════════════════════════
+             SCOPE SURFACE — TAB 3
+        ════════════════════════════════════ -->
+        <div id="surface-scope-final" class="surface">
+          <div class="section-label">Scope — Final review and confirmation</div>
+          <div class="scope-shell">
+            <div class="scope-header">
+              <div class="scope-summary">
+                <span class="chip chip-blue">14 selected</span>
+                <span class="chip chip-green">11 ready</span>
+                <span class="chip chip-amber">3 needs input</span>
+              </div>
+            </div>
+
+            <div class="scope-tabbar">
+              <div class="scope-tab">1. Select Tables</div>
+              <div class="scope-tab">2. Table Details</div>
+              <div class="scope-tab active">3. Final Scope</div>
+            </div>
+
+            <div class="scope-grid" style="flex:1;">
+              <div class="card card-p" style="overflow-y:auto;">
+                <p class="text-sm font-semibold mb8">Scope summary</p>
+                <div class="kv-grid">
+                  <div class="kv-field"><p>Total selected</p><div class="kv-pill">14 tables</div></div>
+                  <div class="kv-field"><p>Ready to run</p><div class="kv-pill">11 tables</div></div>
+                  <div class="kv-field"><p>Facts</p><div class="kv-pill">6</div></div>
+                  <div class="kv-field"><p>Dimensions</p><div class="kv-pill">8</div></div>
+                  <div class="kv-field"><p>With PK defined</p><div class="kv-pill">12 / 14</div></div>
+                  <div class="kv-field"><p>With relationships</p><div class="kv-pill">10 / 14</div></div>
+                </div>
+
+                <div style="margin-top:12px;">
+                  <p class="text-xs text-muted mb8">Blocked / missing details</p>
+                  <div class="kv-pill">dbo.dim_customer — SCD type + effective columns required</div>
+                  <div class="kv-pill mt8">reporting.gold_summary — PK columns required</div>
+                  <div class="kv-pill mt8">dbo.dim_product — canonical date required</div>
+                </div>
+              </div>
+
+              <div class="card card-p" style="overflow-y:auto;">
+                <p class="text-sm font-semibold mb8">Actions</p>
+                <p class="text-xs text-muted mb12">
+                  Confirming scope persists table metadata and starts candidacy/migration planning.
+                </p>
+                <button class="btn btn-primary" style="width:100%;">Enable Monitor and lock plan</button>
+                <button class="btn btn-outline mt8" style="width:100%;" onclick="show('scope-details', null, 'scope')">Back to Table Details</button>
+                <hr style="margin: 14px 0; border-color: var(--border);" />
+                <p class="text-xs text-muted mb8">What happens if selection changes later?</p>
+                <p class="text-xs text-muted">
+                  Removed tables are excluded from downstream planning. Re-added tables return as
+                  "needs details" until required metadata is confirmed again.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div><!-- /surface-scope-final -->
 
         <!-- ════════════════════════════════════
              MONITOR SURFACE
@@ -844,23 +1015,16 @@
         </div><!-- /surface-monitor -->
 
         <!-- ════════════════════════════════════
-             SETTINGS SURFACE
+             SETTINGS SURFACE — CONNECTIONS
         ════════════════════════════════════ -->
-        <div id="surface-settings" class="surface">
-
-          <!-- Settings tab bar -->
+        <div id="surface-settings-connections" class="surface">
           <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
-            <button class="stab active" id="stab-connections" onclick="settingsTab('connections')">Connections</button>
-            <button class="stab"        id="stab-workspace"   onclick="settingsTab('workspace')">Workspace</button>
-            <button class="stab"        id="stab-reset"       onclick="settingsTab('reset')">Reset</button>
-            <button class="stab"        id="stab-usage"       onclick="settingsTab('usage')">Usage</button>
+            <div class="stab active">Connections</div>
+            <div class="stab">Workspace</div>
+            <div class="stab">Reset</div>
+            <div class="stab">Usage</div>
           </div>
-
-          <!-- ── Connections tab ────────────────────────────
-               One-time. Reusable across all migrations.
-               Safe to update at any time.
-          ─────────────────────────────────────────────── -->
-          <div id="stab-panel-connections" class="stab-panel" style="max-width:520px;">
+          <div class="stab-panel" style="max-width:520px;">
 
             <div class="settings-group-label">One-time setup · Safe to update at any time</div>
 
@@ -896,13 +1060,19 @@
             </div>
 
           </div>
+        </div>
 
-          <!-- ── Workspace tab ───────────────────────────────
-               Set once per migration.
-               Locked while a migration is active — shows lock
-               badge. Changes require resetting the migration.
-          ─────────────────────────────────────────────── -->
-          <div id="stab-panel-workspace" class="stab-panel" style="display:none; max-width:520px;">
+        <!-- ════════════════════════════════════
+             SETTINGS SURFACE — WORKSPACE
+        ════════════════════════════════════ -->
+        <div id="surface-settings-workspace" class="surface">
+          <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
+            <div class="stab">Connections</div>
+            <div class="stab active">Workspace</div>
+            <div class="stab">Reset</div>
+            <div class="stab">Usage</div>
+          </div>
+          <div class="stab-panel" style="max-width:520px;">
 
             <div class="settings-group-label row gap6">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -976,13 +1146,19 @@
             </div>
 
           </div>
+        </div>
 
-          <!-- ── Reset tab ───────────────────────────────────
-               Abandons the migration repo branch, clears the
-               local working directory, resets all migration
-               state. Keeps Connections.
-          ─────────────────────────────────────────────── -->
-          <div id="stab-panel-reset" class="stab-panel" style="display:none; max-width:520px;">
+        <!-- ════════════════════════════════════
+             SETTINGS SURFACE — RESET
+        ════════════════════════════════════ -->
+        <div id="surface-settings-reset" class="surface">
+          <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
+            <div class="stab">Connections</div>
+            <div class="stab">Workspace</div>
+            <div class="stab active">Reset</div>
+            <div class="stab">Usage</div>
+          </div>
+          <div class="stab-panel" style="max-width:520px;">
 
             <div class="card card-p" style="border-color: color-mix(in oklch, var(--destructive), transparent 70%);">
               <div class="row gap10 mb8">
@@ -1024,12 +1200,19 @@
             </div>
 
           </div>
+        </div>
 
-          <!-- ── Usage tab ─────────────────────────────────
-               Aggregated cost + token tracking per migration.
-               Breakdown dimensions: table, phase, model, day.
-          ─────────────────────────────────────────────── -->
-          <div id="stab-panel-usage" class="stab-panel" style="display:none;">
+        <!-- ════════════════════════════════════
+             SETTINGS SURFACE — USAGE
+        ════════════════════════════════════ -->
+        <div id="surface-settings-usage" class="surface">
+          <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
+            <div class="stab">Connections</div>
+            <div class="stab">Workspace</div>
+            <div class="stab">Reset</div>
+            <div class="stab active">Usage</div>
+          </div>
+          <div class="stab-panel">
 
             <!-- Filters -->
             <div class="usage-filters">
@@ -1210,12 +1393,12 @@
             </div>
 
           </div>
-
         </div>
 
       </div><!-- /content -->
     </div><!-- /main -->
   </div><!-- /app -->
+  </div><!-- /mockup-shell -->
 
   <style>
     @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
@@ -1335,11 +1518,10 @@
       border: none; border-bottom: 2px solid transparent;
       background: transparent;
       color: var(--fg-muted);
-      cursor: pointer;
       transition: color .15s, border-color .15s;
       margin-bottom: -1px;
     }
-    .stab:hover { color: var(--fg); }
+    .stab:hover { color: var(--fg-muted); }
     .stab.active { color: var(--pacific); border-bottom-color: var(--pacific); }
     .stab-panel { }
     .settings-group-label {
@@ -1350,11 +1532,11 @@
   </style>
 
   <script>
-    function show(name, btn) {
+    function show(name, btn, navName) {
       document.querySelectorAll('.surface').forEach(s => s.classList.remove('active'));
       document.getElementById('surface-' + name).classList.add('active');
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('nav-' + name).classList.add('active');
+      document.getElementById('nav-' + (navName || name)).classList.add('active');
       if (btn) {
         document.querySelectorAll('.sw-btn').forEach(b => b.classList.remove('on'));
         btn.classList.add('on');
@@ -1367,23 +1549,9 @@
       document.getElementById('home-active').style.display = state === 'active' ? 'block' : 'none';
     }
 
-    function scopeLock(locked) {
-      document.getElementById('scope-locked-banner').style.display = locked ? 'block' : 'none';
-      var content = document.getElementById('scope-content');
-      content.style.opacity = locked ? '0.5' : '1';
-      content.style.pointerEvents = locked ? 'none' : '';
-    }
-
     function monitorState(state) {
       document.getElementById('monitor-ready').style.display   = state === 'ready'   ? 'block' : 'none';
       document.getElementById('monitor-running').style.display = state === 'running' ? 'block' : 'none';
-    }
-
-    function settingsTab(tab) {
-      ['connections', 'workspace', 'reset', 'usage'].forEach(function(t) {
-        document.getElementById('stab-' + t).classList.toggle('active', t === tab);
-        document.getElementById('stab-panel-' + t).style.display = t === tab ? 'block' : 'none';
-      });
     }
 
     function toggleUsageRun(id) {
@@ -1399,6 +1567,7 @@
       document.getElementById('theme-light').classList.toggle('on', theme === 'light');
       document.getElementById('theme-dark').classList.toggle('on', theme === 'dark');
     }
+
   </script>
 
 </body>
