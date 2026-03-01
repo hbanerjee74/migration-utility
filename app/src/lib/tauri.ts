@@ -9,6 +9,8 @@ import type {
   UsageRun,
   UsageRunDetail,
   UsageSummary,
+  WorkspaceApplyJobStatus,
+  WorkspaceApplyProgressEvent,
   Workspace,
 } from './types';
 
@@ -30,11 +32,16 @@ export const githubListRepos = (query: string, limit = 10) =>
 export const workspaceGet = () =>
   invoke<Workspace | null>('workspace_get');
 
-export const workspaceApplyAndClone = (args: ApplyWorkspaceArgs) =>
-  invoke<Workspace>('workspace_apply_and_clone', { args });
+export const workspaceApplyStart = (args: ApplyWorkspaceArgs) =>
+  invoke<string>('workspace_apply_start', { args });
+
+export const workspaceApplyStatus = (jobId: string) =>
+  invoke<WorkspaceApplyJobStatus>('workspace_apply_status', { jobId });
 
 export const workspaceResetState = () =>
   invoke<void>('workspace_reset_state');
+
+export type { WorkspaceApplyProgressEvent };
 
 export const workspaceTestSourceConnection = (args: {
   sourceType: 'sql_server' | 'fabric_warehouse';

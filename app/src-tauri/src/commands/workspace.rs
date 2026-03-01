@@ -1,12 +1,17 @@
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     process::Command,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock, Mutex,
+    },
 };
 
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Deserialize;
-use tauri::State;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, State};
 use tiberius::{AuthMethod, Client, Config, EncryptionLevel};
 use tokio::net::TcpStream;
 use tokio::runtime::Builder as RuntimeBuilder;
@@ -15,7 +20,11 @@ use uuid::Uuid;
 
 use crate::db::DbState;
 use crate::source_sql::{resolve_source_query, should_log_source_sql, SourceQuery};
-use crate::types::{CommandError, Workspace};
+use crate::types::{CommandError, WarehouseProcedure, WarehouseSchema, WarehouseTable, Workspace};
+
+static WORKSPACE_APPLY_RUNNING: AtomicBool = AtomicBool::new(false);
+static WORKSPACE_APPLY_JOBS: LazyLock<Mutex<HashMap<String, WorkspaceApplyJobStatus>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,43 +98,7 @@ fn clear_workspace_state(conn: &Connection) -> Result<(), CommandError> {
         CommandError::from(e)
     })?;
 
-    // Clear children before parents to satisfy foreign keys.
-    tx.execute("DELETE FROM table_config", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear table_config: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM candidacy", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear candidacy: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM table_artifacts", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear table_artifacts: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM selected_tables", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear selected_tables: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM pipeline_activities", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear pipeline_activities: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM warehouse_tables", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear warehouse_tables: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM warehouse_procedures", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear warehouse_procedures: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM warehouse_schemas", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear warehouse_schemas: {e}");
-        CommandError::from(e)
-    })?;
-    tx.execute("DELETE FROM items", []).map_err(|e| {
-        log::error!("workspace_reset_state: failed to clear items: {e}");
-        CommandError::from(e)
-    })?;
+    // Root delete; dependent workspace rows are removed by FK ON DELETE CASCADE.
     tx.execute("DELETE FROM workspaces", []).map_err(|e| {
         log::error!("workspace_reset_state: failed to clear workspaces: {e}");
         CommandError::from(e)
@@ -135,6 +108,63 @@ fn clear_workspace_state(conn: &Connection) -> Result<(), CommandError> {
         log::error!("workspace_reset_state: failed to commit: {e}");
         CommandError::from(e)
     })?;
+    Ok(())
+}
+
+fn clear_migration_repo_contents(repo_path: &str) -> Result<(), CommandError> {
+    let trimmed = repo_path.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let path = Path::new(trimmed);
+    if !path.exists() {
+        std::fs::create_dir_all(path).map_err(|e| {
+            log::error!(
+                "workspace_reset_state: failed to recreate missing migration repo path {}: {e}",
+                path.display()
+            );
+            CommandError::from(e)
+        })?;
+        return Ok(());
+    }
+
+    if !path.is_dir() {
+        return Err(CommandError::Io(format!(
+            "Migration repo path is not a directory: {}",
+            path.display()
+        )));
+    }
+
+    for entry in std::fs::read_dir(path).map_err(|e| {
+        log::error!(
+            "workspace_reset_state: failed to read migration repo path {}: {e}",
+            path.display()
+        );
+        CommandError::from(e)
+    })? {
+        let entry = entry.map_err(CommandError::from)?;
+        let entry_path = entry.path();
+        let file_type = entry.file_type().map_err(CommandError::from)?;
+        if file_type.is_dir() {
+            std::fs::remove_dir_all(&entry_path).map_err(|e| {
+                log::error!(
+                    "workspace_reset_state: failed to remove directory {}: {e}",
+                    entry_path.display()
+                );
+                CommandError::from(e)
+            })?;
+        } else {
+            std::fs::remove_file(&entry_path).map_err(|e| {
+                log::error!(
+                    "workspace_reset_state: failed to remove file {}: {e}",
+                    entry_path.display()
+                );
+                CommandError::from(e)
+            })?;
+        }
+    }
+
     Ok(())
 }
 
@@ -184,6 +214,807 @@ fn ensure_existing_repo_matches(repo_name: &str, repo_path: &str) -> Result<(), 
         None => Err(CommandError::Io(format!(
             "Could not parse origin remote '{remote_url}'. Choose an empty directory or matching repo path for {repo_name}."
         ))),
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceApplyProgressEvent {
+    stage: &'static str,
+    percent: u8,
+    message: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceApplyJobStatus {
+    pub job_id: String,
+    pub state: String,
+    pub is_alive: bool,
+    pub stage: Option<String>,
+    pub percent: u8,
+    pub message: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone)]
+struct SourceConnectionConfig {
+    source_type: String,
+    source_server: String,
+    source_database: String,
+    source_port: u16,
+    source_username: String,
+    source_password: String,
+    source_encrypt: bool,
+    source_trust_server_certificate: bool,
+}
+
+struct SqlServerInventory {
+    container_id_local: Option<i64>,
+    schemas: Vec<WarehouseSchema>,
+    tables: Vec<WarehouseTable>,
+    procedures: Vec<WarehouseProcedure>,
+}
+
+fn emit_apply_progress(
+    app: &AppHandle,
+    job_id: &str,
+    stage: &'static str,
+    percent: u8,
+    message: impl Into<String>,
+) {
+    let message = message.into();
+    set_job_status(
+        job_id,
+        "running",
+        Some(stage),
+        percent,
+        Some(message.clone()),
+        None,
+    );
+    let payload = WorkspaceApplyProgressEvent {
+        stage,
+        percent,
+        message,
+    };
+    if let Err(e) = app.emit("workspace-apply-progress", payload) {
+        log::warn!("workspace_apply_and_clone: failed to emit progress event: {e}");
+    }
+}
+
+fn set_job_status(
+    job_id: &str,
+    state: &str,
+    stage: Option<&str>,
+    percent: u8,
+    message: Option<String>,
+    error: Option<String>,
+) {
+    let mut jobs = WORKSPACE_APPLY_JOBS.lock().unwrap();
+    jobs.insert(
+        job_id.to_string(),
+        WorkspaceApplyJobStatus {
+            job_id: job_id.to_string(),
+            state: state.to_string(),
+            is_alive: state == "running",
+            stage: stage.map(|s| s.to_string()),
+            percent,
+            message,
+            error,
+        },
+    );
+}
+
+fn require_sql_server_source(
+    args: &ApplyWorkspaceArgs,
+) -> Result<SourceConnectionConfig, CommandError> {
+    if args.source_type.as_deref() != Some("sql_server") {
+        return Err(CommandError::Io(
+            "Apply currently supports sql_server source type only".to_string(),
+        ));
+    }
+    let source_server = args
+        .source_server
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| CommandError::Io("Source server is required".to_string()))?
+        .to_string();
+    let source_database = args
+        .source_database
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| CommandError::Io("Source database is required".to_string()))?
+        .to_string();
+    let source_port = validate_source_port(
+        args.source_port
+            .ok_or_else(|| CommandError::Io("Source port is required".to_string()))?,
+    )?;
+    let source_username = args
+        .source_username
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| CommandError::Io("Source username is required".to_string()))?
+        .to_string();
+    let source_password = args
+        .source_password
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| CommandError::Io("Source password is required".to_string()))?
+        .to_string();
+
+    Ok(SourceConnectionConfig {
+        source_type: "sql_server".to_string(),
+        source_server,
+        source_database,
+        source_port,
+        source_username,
+        source_password,
+        source_encrypt: args.source_encrypt.unwrap_or(true),
+        source_trust_server_certificate: args.source_trust_server_certificate.unwrap_or(false),
+    })
+}
+
+fn build_tiberius_config(cfg: &SourceConnectionConfig) -> Config {
+    let mut config = Config::new();
+    config.host(cfg.source_server.trim());
+    config.port(cfg.source_port);
+    config.database(cfg.source_database.trim());
+    config.authentication(AuthMethod::sql_server(
+        cfg.source_username.trim(),
+        cfg.source_password.trim(),
+    ));
+    config.encryption(if cfg.source_encrypt {
+        EncryptionLevel::Required
+    } else {
+        EncryptionLevel::Off
+    });
+    if cfg.source_trust_server_certificate {
+        config.trust_cert();
+    }
+    config
+}
+
+fn fetch_sql_server_inventory(
+    cfg: &SourceConnectionConfig,
+    app: &AppHandle,
+    job_id: &str,
+) -> Result<SqlServerInventory, CommandError> {
+    let runtime = RuntimeBuilder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .map_err(|e| CommandError::Io(format!("Failed to create async runtime: {e}")))?;
+
+    let config = build_tiberius_config(cfg);
+    runtime.block_on(async move {
+        let tcp = TcpStream::connect(config.get_addr()).await.map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to connect tcp: {e}");
+            CommandError::Io(format!("Could not connect to source endpoint: {e}"))
+        })?;
+        tcp.set_nodelay(true).map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to set nodelay: {e}");
+            CommandError::Io(format!("Could not configure socket: {e}"))
+        })?;
+
+        let mut client = Client::connect(config, tcp.compat_write())
+            .await
+            .map_err(|e| {
+                let _ = e;
+                log::error!("workspace_apply_and_clone: failed to authenticate");
+                CommandError::Io("Connection test failed".to_string())
+            })?;
+
+        let container_id_query =
+            resolve_source_query(&cfg.source_type, SourceQuery::DiscoverContainerId)?;
+        if should_log_source_sql() {
+            log::debug!(
+                "workspace_apply_and_clone: executing query={} source_type={} sql={}",
+                SourceQuery::DiscoverContainerId.name(),
+                cfg.source_type,
+                container_id_query.trim()
+            );
+        }
+        let container_rows = client
+            .simple_query(container_id_query)
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: container id query failed: {e}");
+                CommandError::Io(format!("Container discovery failed: {e}"))
+            })?
+            .into_first_result()
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: container id result parse failed: {e}");
+                CommandError::Io(format!("Container discovery failed: {e}"))
+            })?;
+        let container_id_local = container_rows.first().and_then(|row| row.get::<i64, _>(0));
+
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_schemas",
+            50,
+            "Importing source schemas...",
+        );
+        let schemas_query = resolve_source_query(&cfg.source_type, SourceQuery::DiscoverSchemas)?;
+        if should_log_source_sql() {
+            log::debug!(
+                "workspace_apply_and_clone: executing query={} source_type={} sql={}",
+                SourceQuery::DiscoverSchemas.name(),
+                cfg.source_type,
+                schemas_query.trim()
+            );
+        }
+        let schema_rows = client
+            .simple_query(schemas_query)
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: schema query failed: {e}");
+                CommandError::Io(format!("Schema discovery failed: {e}"))
+            })?
+            .into_first_result()
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: schema result parse failed: {e}");
+                CommandError::Io(format!("Schema discovery failed: {e}"))
+            })?;
+
+        let mut schemas: Vec<WarehouseSchema> = Vec::with_capacity(schema_rows.len());
+        for row in schema_rows {
+            let schema_name = row
+                .get::<&str, _>(1)
+                .ok_or_else(|| {
+                    CommandError::Io("Schema discovery returned invalid data".to_string())
+                })?
+                .to_string();
+            schemas.push(WarehouseSchema {
+                warehouse_item_id: String::new(),
+                schema_name,
+                schema_id_local: row.get::<i64, _>(0),
+            });
+        }
+
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_tables",
+            65,
+            "Importing source tables...",
+        );
+        let tables_query = resolve_source_query(&cfg.source_type, SourceQuery::DiscoverTables)?;
+        if should_log_source_sql() {
+            log::debug!(
+                "workspace_apply_and_clone: executing query={} source_type={} sql={}",
+                SourceQuery::DiscoverTables.name(),
+                cfg.source_type,
+                tables_query.trim()
+            );
+        }
+        let table_rows = client
+            .simple_query(tables_query)
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: table query failed: {e}");
+                CommandError::Io(format!("Table discovery failed: {e}"))
+            })?
+            .into_first_result()
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: table result parse failed: {e}");
+                CommandError::Io(format!("Table discovery failed: {e}"))
+            })?;
+
+        let mut tables: Vec<WarehouseTable> = Vec::with_capacity(table_rows.len());
+        for row in table_rows {
+            let schema_name = row
+                .get::<&str, _>(0)
+                .ok_or_else(|| {
+                    CommandError::Io("Table discovery returned invalid schema".to_string())
+                })?
+                .to_string();
+            let table_name = row
+                .get::<&str, _>(1)
+                .ok_or_else(|| {
+                    CommandError::Io("Table discovery returned invalid table".to_string())
+                })?
+                .to_string();
+            tables.push(WarehouseTable {
+                warehouse_item_id: String::new(),
+                schema_name,
+                table_name,
+                object_id_local: row.get::<i64, _>(2),
+            });
+        }
+
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_procedures",
+            80,
+            "Importing source procedures...",
+        );
+        let procedures_query =
+            resolve_source_query(&cfg.source_type, SourceQuery::DiscoverProcedures)?;
+        if should_log_source_sql() {
+            log::debug!(
+                "workspace_apply_and_clone: executing query={} source_type={} sql={}",
+                SourceQuery::DiscoverProcedures.name(),
+                cfg.source_type,
+                procedures_query.trim()
+            );
+        }
+        let procedure_rows = client
+            .simple_query(procedures_query)
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: procedure query failed: {e}");
+                CommandError::Io(format!("Procedure discovery failed: {e}"))
+            })?
+            .into_first_result()
+            .await
+            .map_err(|e| {
+                log::error!("workspace_apply_and_clone: procedure result parse failed: {e}");
+                CommandError::Io(format!("Procedure discovery failed: {e}"))
+            })?;
+
+        let mut procedures: Vec<WarehouseProcedure> = Vec::with_capacity(procedure_rows.len());
+        for row in procedure_rows {
+            let schema_name = row
+                .get::<&str, _>(0)
+                .ok_or_else(|| {
+                    CommandError::Io("Procedure discovery returned invalid schema".to_string())
+                })?
+                .to_string();
+            let procedure_name = row
+                .get::<&str, _>(1)
+                .ok_or_else(|| {
+                    CommandError::Io("Procedure discovery returned invalid procedure".to_string())
+                })?
+                .to_string();
+            procedures.push(WarehouseProcedure {
+                warehouse_item_id: String::new(),
+                schema_name,
+                procedure_name,
+                object_id_local: row.get::<i64, _>(2),
+                sql_body: row.get::<&str, _>(3).map(|v| v.to_string()),
+            });
+        }
+
+        Ok(SqlServerInventory {
+            container_id_local,
+            schemas,
+            tables,
+            procedures,
+        })
+    })
+}
+
+fn upsert_workspace(
+    conn: &Connection,
+    args: &ApplyWorkspaceArgs,
+    repo_name: &str,
+    repo_path: &str,
+) -> Result<Workspace, CommandError> {
+    let existing: Option<(String, String)> = conn
+        .query_row(
+            "SELECT id, created_at FROM workspaces ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(CommandError::from)?;
+
+    let workspace = if let Some((id, created_at)) = existing {
+        conn.execute(
+            "UPDATE workspaces SET
+                display_name=?1,
+                migration_repo_name=?2,
+                migration_repo_path=?3,
+                fabric_url=?4,
+                fabric_service_principal_id=?5,
+                fabric_service_principal_secret=?6,
+                source_type=?7,
+                source_server=?8,
+                source_database=?9,
+                source_port=?10,
+                source_authentication_mode=?11,
+                source_username=?12,
+                source_password=?13,
+                source_encrypt=?14,
+                source_trust_server_certificate=?15
+             WHERE id=?16",
+            params![
+                args.name,
+                repo_name,
+                repo_path,
+                args.fabric_url,
+                args.fabric_service_principal_id,
+                args.fabric_service_principal_secret,
+                args.source_type,
+                args.source_server,
+                args.source_database,
+                args.source_port,
+                args.source_authentication_mode,
+                args.source_username,
+                args.source_password,
+                args.source_encrypt,
+                args.source_trust_server_certificate,
+                id
+            ],
+        )
+        .map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to update workspace: {e}");
+            CommandError::from(e)
+        })?;
+
+        Workspace {
+            id,
+            display_name: args.name.clone(),
+            migration_repo_name: Some(repo_name.to_string()),
+            migration_repo_path: repo_path.to_string(),
+            fabric_url: args.fabric_url.clone(),
+            fabric_service_principal_id: args.fabric_service_principal_id.clone(),
+            fabric_service_principal_secret: args.fabric_service_principal_secret.clone(),
+            source_type: args.source_type.clone(),
+            source_server: args.source_server.clone(),
+            source_database: args.source_database.clone(),
+            source_port: args.source_port,
+            source_authentication_mode: args.source_authentication_mode.clone(),
+            source_username: args.source_username.clone(),
+            source_password: args.source_password.clone(),
+            source_encrypt: args.source_encrypt,
+            source_trust_server_certificate: args.source_trust_server_certificate,
+            created_at,
+        }
+    } else {
+        let id = Uuid::new_v4().to_string();
+        let created_at = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO workspaces(
+                id, display_name, migration_repo_name, migration_repo_path, fabric_url,
+                fabric_service_principal_id, fabric_service_principal_secret, source_type,
+                source_server, source_database, source_port, source_authentication_mode,
+                source_username, source_password, source_encrypt, source_trust_server_certificate,
+                created_at
+              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            params![
+                id,
+                args.name,
+                repo_name,
+                repo_path,
+                args.fabric_url,
+                args.fabric_service_principal_id,
+                args.fabric_service_principal_secret,
+                args.source_type,
+                args.source_server,
+                args.source_database,
+                args.source_port,
+                args.source_authentication_mode,
+                args.source_username,
+                args.source_password,
+                args.source_encrypt,
+                args.source_trust_server_certificate,
+                created_at
+            ],
+        )
+        .map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to create workspace: {e}");
+            CommandError::from(e)
+        })?;
+
+        Workspace {
+            id,
+            display_name: args.name.clone(),
+            migration_repo_name: Some(repo_name.to_string()),
+            migration_repo_path: repo_path.to_string(),
+            fabric_url: args.fabric_url.clone(),
+            fabric_service_principal_id: args.fabric_service_principal_id.clone(),
+            fabric_service_principal_secret: args.fabric_service_principal_secret.clone(),
+            source_type: args.source_type.clone(),
+            source_server: args.source_server.clone(),
+            source_database: args.source_database.clone(),
+            source_port: args.source_port,
+            source_authentication_mode: args.source_authentication_mode.clone(),
+            source_username: args.source_username.clone(),
+            source_password: args.source_password.clone(),
+            source_encrypt: args.source_encrypt,
+            source_trust_server_certificate: args.source_trust_server_certificate,
+            created_at,
+        }
+    };
+
+    Ok(workspace)
+}
+
+fn persist_sql_server_inventory(
+    conn: &Connection,
+    workspace_id: &str,
+    source_cfg: &SourceConnectionConfig,
+    inventory: &SqlServerInventory,
+    app: Option<&AppHandle>,
+    job_id: Option<&str>,
+) -> Result<(), CommandError> {
+    let tx = conn.unchecked_transaction().map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to begin inventory transaction: {e}");
+        CommandError::from(e)
+    })?;
+
+    let source_database = source_cfg.source_database.as_str();
+    let source_item_id = format!("source-db-{workspace_id}");
+
+    tx.execute(
+        "INSERT OR REPLACE INTO items(id, workspace_id, display_name, description, folder_id, item_type, connection_string, collation_type)
+         VALUES (?1, ?2, ?3, ?4, NULL, 'Warehouse', NULL, NULL)",
+        params![
+            source_item_id,
+            workspace_id,
+            source_database,
+            Some(format!("SQL Server source database {source_database}"))
+        ],
+    )
+    .map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to upsert source item: {e}");
+        CommandError::from(e)
+    })?;
+
+    tx.execute(
+        "DELETE FROM warehouse_tables WHERE warehouse_item_id=?1",
+        params![source_item_id],
+    )
+    .map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to clear source tables: {e}");
+        CommandError::from(e)
+    })?;
+    tx.execute(
+        "DELETE FROM warehouse_procedures WHERE warehouse_item_id=?1",
+        params![source_item_id],
+    )
+    .map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to clear source procedures: {e}");
+        CommandError::from(e)
+    })?;
+    tx.execute(
+        "DELETE FROM warehouse_schemas WHERE warehouse_item_id=?1",
+        params![source_item_id],
+    )
+    .map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to clear source schemas: {e}");
+        CommandError::from(e)
+    })?;
+
+    let total_objects =
+        inventory.schemas.len() + inventory.tables.len() + inventory.procedures.len();
+    let mut imported_objects = 0usize;
+
+    for schema in &inventory.schemas {
+        tx.execute(
+            "INSERT OR REPLACE INTO warehouse_schemas(warehouse_item_id, schema_name, schema_id_local)
+             VALUES (?1, ?2, ?3)",
+            params![source_item_id, schema.schema_name, schema.schema_id_local],
+        )
+        .map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to upsert schema: {e}");
+            CommandError::from(e)
+        })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
+    }
+    for table in &inventory.tables {
+        tx.execute(
+            "INSERT OR REPLACE INTO warehouse_tables(warehouse_item_id, schema_name, table_name, object_id_local)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![source_item_id, table.schema_name, table.table_name, table.object_id_local],
+        )
+        .map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to upsert table: {e}");
+            CommandError::from(e)
+        })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
+    }
+    for procedure in &inventory.procedures {
+        tx.execute(
+            "INSERT OR REPLACE INTO warehouse_procedures(warehouse_item_id, schema_name, procedure_name, object_id_local, sql_body)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                source_item_id,
+                procedure.schema_name,
+                procedure.procedure_name,
+                procedure.object_id_local,
+                procedure.sql_body.as_deref()
+            ],
+        )
+        .map_err(|e| {
+            log::error!("workspace_apply_and_clone: failed to upsert procedure: {e}");
+            CommandError::from(e)
+        })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
+    }
+
+    persist_sql_server_canonical_model(&tx, workspace_id, source_cfg, inventory)?;
+
+    tx.commit().map_err(|e| {
+        log::error!("workspace_apply_and_clone: failed to commit source inventory: {e}");
+        CommandError::from(e)
+    })?;
+    Ok(())
+}
+
+fn canonical_source_external_id(cfg: &SourceConnectionConfig) -> String {
+    format!(
+        "sql_server://{}:{}/{}",
+        cfg.source_server.trim().to_lowercase(),
+        cfg.source_port,
+        cfg.source_database.trim().to_lowercase()
+    )
+}
+
+fn source_row_id_for_workspace(workspace_id: &str) -> String {
+    format!("source-{workspace_id}")
+}
+
+fn persist_sql_server_canonical_model(
+    tx: &rusqlite::Transaction<'_>,
+    workspace_id: &str,
+    source_cfg: &SourceConnectionConfig,
+    inventory: &SqlServerInventory,
+) -> Result<(), CommandError> {
+    let source_id = source_row_id_for_workspace(workspace_id);
+    let source_external_id = canonical_source_external_id(source_cfg);
+    let container_id = format!("container-{workspace_id}-sqlserver-db");
+    let container_external_id = inventory
+        .container_id_local
+        .map(|v| v.to_string())
+        .ok_or_else(|| {
+            CommandError::Io(
+                "SQL Server container discovery did not return database_id (DB_ID())".to_string(),
+            )
+        })?;
+
+    tx.execute(
+        "DELETE FROM sources WHERE workspace_id = ?1",
+        params![workspace_id],
+    )
+    .map_err(CommandError::from)?;
+
+    tx.execute(
+        "INSERT INTO sources(
+            id, workspace_id, source_type, external_source_id, display_name,
+            source_server, source_database, source_port, source_authentication_mode
+         ) VALUES (?1, ?2, 'sql_server', ?3, ?4, ?5, ?6, ?7, 'sql_password')",
+        params![
+            source_id,
+            workspace_id,
+            source_external_id,
+            source_cfg.source_database,
+            source_cfg.source_server,
+            source_cfg.source_database,
+            i64::from(source_cfg.source_port),
+        ],
+    )
+    .map_err(CommandError::from)?;
+
+    tx.execute(
+        "INSERT INTO containers(id, source_id, container_type, external_container_id, container_name)
+         VALUES (?1, ?2, 'database', ?3, ?4)",
+        params![
+            container_id,
+            source_id,
+            container_external_id,
+            source_cfg.source_database
+        ],
+    )
+    .map_err(CommandError::from)?;
+
+    for schema in &inventory.schemas {
+        let namespace_id = format!(
+            "namespace-{workspace_id}-{}",
+            schema.schema_name.to_lowercase()
+        );
+        tx.execute(
+            "INSERT INTO namespaces(id, container_id, namespace_name, external_namespace_id)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                namespace_id,
+                container_id,
+                schema.schema_name,
+                schema.schema_id_local.map(|v| v.to_string())
+            ],
+        )
+        .map_err(CommandError::from)?;
+    }
+
+    for table in &inventory.tables {
+        let namespace_id = format!(
+            "namespace-{workspace_id}-{}",
+            table.schema_name.to_lowercase()
+        );
+        let object_id = format!(
+            "object-{workspace_id}-table-{}-{}",
+            table.schema_name.to_lowercase(),
+            table.table_name.to_lowercase()
+        );
+        tx.execute(
+            "INSERT INTO data_objects(id, namespace_id, object_name, object_type, external_object_id, sql_body)
+             VALUES (?1, ?2, ?3, 'table', ?4, NULL)",
+            params![
+                object_id,
+                namespace_id,
+                table.table_name,
+                table.object_id_local.map(|v| v.to_string())
+            ],
+        )
+        .map_err(CommandError::from)?;
+    }
+
+    for procedure in &inventory.procedures {
+        let namespace_id = format!(
+            "namespace-{workspace_id}-{}",
+            procedure.schema_name.to_lowercase()
+        );
+        let object_id = format!(
+            "object-{workspace_id}-procedure-{}-{}",
+            procedure.schema_name.to_lowercase(),
+            procedure.procedure_name.to_lowercase()
+        );
+        tx.execute(
+            "INSERT INTO data_objects(id, namespace_id, object_name, object_type, external_object_id, sql_body)
+             VALUES (?1, ?2, ?3, 'procedure', ?4, ?5)",
+            params![
+                object_id,
+                namespace_id,
+                procedure.procedure_name,
+                procedure.object_id_local.map(|v| v.to_string()),
+                procedure.sql_body.as_deref()
+            ],
+        )
+        .map_err(CommandError::from)?;
+    }
+
+    Ok(())
+}
+
+fn maybe_emit_object_import_progress(
+    app: Option<&AppHandle>,
+    job_id: Option<&str>,
+    imported_objects: usize,
+    total_objects: usize,
+) {
+    let Some(app) = app else {
+        return;
+    };
+    let Some(job_id) = job_id else {
+        return;
+    };
+    if total_objects == 0 {
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_source_metadata",
+            99,
+            "Importing source metadata... 0/0",
+        );
+        return;
+    }
+
+    if imported_objects == 1
+        || imported_objects == total_objects
+        || imported_objects.is_multiple_of(25)
+    {
+        let ratio = imported_objects as f64 / total_objects as f64;
+        let percent = (95.0 + (ratio * 4.0)).round() as u8;
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_source_metadata",
+            percent.min(99),
+            format!("Importing source metadata... {imported_objects}/{total_objects}"),
+        );
     }
 }
 
@@ -264,6 +1095,17 @@ pub fn workspace_create(
 pub fn workspace_apply_and_clone(
     args: ApplyWorkspaceArgs,
     state: State<DbState>,
+    app: AppHandle,
+) -> Result<Workspace, CommandError> {
+    let conn = state.0.lock().unwrap();
+    run_workspace_apply_with_conn(args, &conn, &app, "direct-apply")
+}
+
+fn run_workspace_apply_with_conn(
+    args: ApplyWorkspaceArgs,
+    conn: &Connection,
+    app: &AppHandle,
+    job_id: &str,
 ) -> Result<Workspace, CommandError> {
     log::info!(
         "workspace_apply_and_clone: name={} repo={}",
@@ -289,150 +1131,137 @@ pub fn workspace_apply_and_clone(
         ));
     }
     validate_source_type(&args.source_type)?;
+    let source_cfg = require_sql_server_source(&args)?;
 
     let token = {
-        let conn = state.0.lock().unwrap();
-        let settings = crate::db::read_settings(&conn).map_err(CommandError::Io)?;
+        let settings = crate::db::read_settings(conn).map_err(CommandError::Io)?;
         settings
             .github_oauth_token
             .ok_or_else(|| CommandError::Io("GitHub is not connected".to_string()))?
     };
 
+    emit_apply_progress(
+        app,
+        job_id,
+        "validating_source_access",
+        15,
+        "Validating source connectivity and access...",
+    );
+    let inventory = fetch_sql_server_inventory(&source_cfg, app, job_id)?;
+
+    emit_apply_progress(
+        app,
+        job_id,
+        "verifying_repo",
+        35,
+        "Verifying migration repository...",
+    );
     if let Err(e) = clone_repo_if_needed(&repo_name, &repo_path, &token) {
         log::error!("workspace_apply_and_clone: failed: {}", e);
         return Err(e);
     }
 
-    let conn = state.0.lock().unwrap();
-    let existing: Option<(String, String)> = conn
-        .query_row(
-            "SELECT id, created_at FROM workspaces ORDER BY created_at DESC LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(CommandError::from)?;
+    emit_apply_progress(
+        app,
+        job_id,
+        "persisting_workspace",
+        90,
+        "Persisting source settings...",
+    );
+    let workspace = upsert_workspace(conn, &args, &repo_name, &repo_path)?;
+    emit_apply_progress(
+        app,
+        job_id,
+        "importing_source_metadata",
+        95,
+        "Writing source metadata to local workspace...",
+    );
+    persist_sql_server_inventory(
+        conn,
+        &workspace.id,
+        &source_cfg,
+        &inventory,
+        Some(app),
+        Some(job_id),
+    )?;
 
-    let workspace = if let Some((id, created_at)) = existing {
-        conn.execute(
-            "UPDATE workspaces SET
-                display_name=?1,
-                migration_repo_name=?2,
-                migration_repo_path=?3,
-                fabric_url=?4,
-                fabric_service_principal_id=?5,
-                fabric_service_principal_secret=?6,
-                source_type=?7,
-                source_server=?8,
-                source_database=?9,
-                source_port=?10,
-                source_authentication_mode=?11,
-                source_username=?12,
-                source_password=?13,
-                source_encrypt=?14,
-                source_trust_server_certificate=?15
-             WHERE id=?16",
-            params![
-                args.name,
-                repo_name,
-                repo_path,
-                args.fabric_url,
-                args.fabric_service_principal_id,
-                args.fabric_service_principal_secret,
-                args.source_type,
-                args.source_server,
-                args.source_database,
-                args.source_port,
-                args.source_authentication_mode,
-                args.source_username,
-                args.source_password,
-                args.source_encrypt,
-                args.source_trust_server_certificate,
-                id
-            ],
-        )
-        .map_err(|e| {
-            log::error!("workspace_apply_and_clone: failed to update workspace: {e}");
-            CommandError::from(e)
-        })?;
-
-        Workspace {
-            id,
-            display_name: args.name,
-            migration_repo_name: Some(repo_name),
-            migration_repo_path: repo_path,
-            fabric_url: args.fabric_url,
-            fabric_service_principal_id: args.fabric_service_principal_id,
-            fabric_service_principal_secret: args.fabric_service_principal_secret,
-            source_type: args.source_type,
-            source_server: args.source_server,
-            source_database: args.source_database,
-            source_port: args.source_port,
-            source_authentication_mode: args.source_authentication_mode,
-            source_username: args.source_username,
-            source_password: args.source_password,
-            source_encrypt: args.source_encrypt,
-            source_trust_server_certificate: args.source_trust_server_certificate,
-            created_at,
-        }
-    } else {
-        let id = Uuid::new_v4().to_string();
-        let created_at = Utc::now().to_rfc3339();
-        conn.execute(
-            "INSERT INTO workspaces(
-                id, display_name, migration_repo_name, migration_repo_path, fabric_url,
-                fabric_service_principal_id, fabric_service_principal_secret, source_type,
-                source_server, source_database, source_port, source_authentication_mode,
-                source_username, source_password, source_encrypt, source_trust_server_certificate,
-                created_at
-              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
-            params![
-                id,
-                args.name,
-                repo_name,
-                repo_path,
-                args.fabric_url,
-                args.fabric_service_principal_id,
-                args.fabric_service_principal_secret,
-                args.source_type,
-                args.source_server,
-                args.source_database,
-                args.source_port,
-                args.source_authentication_mode,
-                args.source_username,
-                args.source_password,
-                args.source_encrypt,
-                args.source_trust_server_certificate,
-                created_at
-            ],
-        )
-        .map_err(|e| {
-            log::error!("workspace_apply_and_clone: failed to create workspace: {e}");
-            CommandError::from(e)
-        })?;
-
-        Workspace {
-            id,
-            display_name: args.name,
-            migration_repo_name: Some(repo_name),
-            migration_repo_path: repo_path,
-            fabric_url: args.fabric_url,
-            fabric_service_principal_id: args.fabric_service_principal_id,
-            fabric_service_principal_secret: args.fabric_service_principal_secret,
-            source_type: args.source_type,
-            source_server: args.source_server,
-            source_database: args.source_database,
-            source_port: args.source_port,
-            source_authentication_mode: args.source_authentication_mode,
-            source_username: args.source_username,
-            source_password: args.source_password,
-            source_encrypt: args.source_encrypt,
-            source_trust_server_certificate: args.source_trust_server_certificate,
-            created_at,
-        }
-    };
-
+    emit_apply_progress(app, job_id, "completed", 100, "Apply completed.");
     Ok(workspace)
+}
+
+#[tauri::command]
+pub fn workspace_apply_start(
+    args: ApplyWorkspaceArgs,
+    app: AppHandle,
+) -> Result<String, CommandError> {
+    if WORKSPACE_APPLY_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(CommandError::Io(
+            "An apply operation is already running".to_string(),
+        ));
+    }
+
+    let job_id = Uuid::new_v4().to_string();
+    set_job_status(
+        &job_id,
+        "running",
+        Some("starting"),
+        5,
+        Some("Starting apply...".to_string()),
+        None,
+    );
+
+    let app_handle = app.clone();
+    let job_id_for_thread = job_id.clone();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<(), CommandError> {
+            use tauri::Manager;
+            let db_path = app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| CommandError::Io(e.to_string()))?
+                .join("migration-utility.db");
+            let conn = crate::db::open(&db_path).map_err(|e| CommandError::Io(e.to_string()))?;
+            let _workspace =
+                run_workspace_apply_with_conn(args, &conn, &app_handle, &job_id_for_thread)?;
+            Ok(())
+        })();
+
+        match result {
+            Ok(_) => set_job_status(
+                &job_id_for_thread,
+                "succeeded",
+                Some("completed"),
+                100,
+                Some("Apply completed.".to_string()),
+                None,
+            ),
+            Err(e) => {
+                let message = e.to_string();
+                set_job_status(
+                    &job_id_for_thread,
+                    "failed",
+                    Some("failed"),
+                    0,
+                    Some("Apply failed.".to_string()),
+                    Some(message),
+                );
+            }
+        }
+        WORKSPACE_APPLY_RUNNING.store(false, Ordering::SeqCst);
+    });
+
+    Ok(job_id)
+}
+
+#[tauri::command]
+pub fn workspace_apply_status(job_id: String) -> Result<WorkspaceApplyJobStatus, CommandError> {
+    let jobs = WORKSPACE_APPLY_JOBS.lock().unwrap();
+    jobs.get(&job_id)
+        .cloned()
+        .ok_or_else(|| CommandError::NotFound(format!("Apply job not found: {job_id}")))
 }
 
 fn clone_repo_if_needed(repo_name: &str, repo_path: &str, token: &str) -> Result<(), CommandError> {
@@ -481,7 +1310,10 @@ fn clone_repo_if_needed(repo_name: &str, repo_path: &str, token: &str) -> Result
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let safe_stderr = redact_clone_error(&stderr, token, repo_name);
-        log::error!("workspace_apply_and_clone: git clone failed: {}", safe_stderr);
+        log::error!(
+            "workspace_apply_and_clone: git clone failed: {}",
+            safe_stderr
+        );
         return Err(CommandError::Git(if stderr.is_empty() {
             "git clone failed".to_string()
         } else {
@@ -515,7 +1347,9 @@ fn validate_source_port(port: i64) -> Result<u16, CommandError> {
 }
 
 #[tauri::command]
-pub fn workspace_test_source_connection(args: TestSourceConnectionArgs) -> Result<String, CommandError> {
+pub fn workspace_test_source_connection(
+    args: TestSourceConnectionArgs,
+) -> Result<String, CommandError> {
     log::info!(
         "workspace_test_source_connection: source_type={} server={} port={} auth_mode={}",
         args.source_type,
@@ -584,10 +1418,13 @@ pub fn workspace_test_source_connection(args: TestSourceConnectionArgs) -> Resul
             CommandError::Io(format!("Could not configure socket: {e}"))
         })?;
 
-        let _client = Client::connect(config, tcp.compat_write()).await.map_err(|e| {
-            log::error!("workspace_test_source_connection: failed to authenticate: {e}");
-            CommandError::Io(format!("Connection test failed: {e}"))
-        })?;
+        let _client = Client::connect(config, tcp.compat_write())
+            .await
+            .map_err(|e| {
+                let _ = e;
+                log::error!("workspace_test_source_connection: failed to authenticate");
+                CommandError::Io("Connection test failed".to_string())
+            })?;
 
         Ok::<(), CommandError>(())
     })?;
@@ -665,10 +1502,13 @@ pub fn workspace_discover_source_databases(
             CommandError::Io(format!("Could not configure socket: {e}"))
         })?;
 
-        let mut client = Client::connect(config, tcp.compat_write()).await.map_err(|e| {
-            log::error!("workspace_discover_source_databases: failed to authenticate: {e}");
-            CommandError::Io(format!("Database discovery failed: {e}"))
-        })?;
+        let mut client = Client::connect(config, tcp.compat_write())
+            .await
+            .map_err(|e| {
+                let _ = e;
+                log::error!("workspace_discover_source_databases: failed to authenticate");
+                CommandError::Io("Database discovery failed".to_string())
+            })?;
 
         let query = resolve_source_query(&args.source_type, SourceQuery::DiscoverDatabases)?;
         if should_log_source_sql() {
@@ -707,6 +1547,19 @@ pub fn workspace_discover_source_databases(
 pub fn workspace_reset_state(state: State<DbState>) -> Result<(), CommandError> {
     log::info!("workspace_reset_state");
     let conn = state.0.lock().unwrap();
+    let migration_repo_path: Option<String> = conn
+        .query_row(
+            "SELECT migration_repo_path FROM workspaces ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(CommandError::from)?;
+
+    if let Some(path) = migration_repo_path {
+        clear_migration_repo_contents(&path)?;
+    }
+
     clear_workspace_state(&conn)
 }
 
@@ -760,6 +1613,26 @@ pub fn workspace_get(state: State<DbState>) -> Result<Option<Workspace>, Command
 mod tests {
     use super::*;
     use crate::db;
+    use crate::source_sql::{resolve_source_query, SourceQuery};
+    use std::fs;
+    use tempfile::tempdir;
+    use tiberius::{AuthMethod, Client, Config, EncryptionLevel};
+    use tokio::net::TcpStream;
+    use tokio::runtime::Builder as RuntimeBuilder;
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+    fn test_source_cfg(database: &str) -> SourceConnectionConfig {
+        SourceConnectionConfig {
+            source_type: "sql_server".to_string(),
+            source_server: "localhost".to_string(),
+            source_database: database.to_string(),
+            source_port: 1433,
+            source_username: "sa".to_string(),
+            source_password: "secret".to_string(),
+            source_encrypt: false,
+            source_trust_server_certificate: true,
+        }
+    }
 
     #[test]
     fn create_and_get_workspace() {
@@ -881,8 +1754,10 @@ mod tests {
             Some("acme/data-platform")
         );
         assert_eq!(
-            normalize_repo_full_name("https://x-access-token:abc@github.com/acme/data-platform.git")
-                .as_deref(),
+            normalize_repo_full_name(
+                "https://x-access-token:abc@github.com/acme/data-platform.git"
+            )
+            .as_deref(),
             Some("acme/data-platform")
         );
     }
@@ -999,5 +1874,529 @@ mod tests {
             .unwrap();
         assert_eq!(workspaces, 0);
         assert_eq!(items, 0);
+    }
+
+    #[test]
+    fn require_sql_server_source_rejects_missing_database() {
+        let args = ApplyWorkspaceArgs {
+            name: "Workspace".to_string(),
+            migration_repo_name: "acme/repo".to_string(),
+            migration_repo_path: "/tmp/repo".to_string(),
+            fabric_url: None,
+            fabric_service_principal_id: None,
+            fabric_service_principal_secret: None,
+            source_type: Some("sql_server".to_string()),
+            source_server: Some("localhost".to_string()),
+            source_database: None,
+            source_port: Some(1433),
+            source_authentication_mode: Some("sql_password".to_string()),
+            source_username: Some("sa".to_string()),
+            source_password: Some("secret".to_string()),
+            source_encrypt: Some(true),
+            source_trust_server_certificate: Some(false),
+        };
+
+        assert!(require_sql_server_source(&args).is_err());
+    }
+
+    #[test]
+    fn persist_sql_server_inventory_replaces_existing_rows() {
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-1", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        let first = SqlServerInventory {
+            container_id_local: Some(1),
+            schemas: vec![WarehouseSchema {
+                warehouse_item_id: String::new(),
+                schema_name: "sales".to_string(),
+                schema_id_local: Some(1),
+            }],
+            tables: vec![WarehouseTable {
+                warehouse_item_id: String::new(),
+                schema_name: "sales".to_string(),
+                table_name: "orders".to_string(),
+                object_id_local: Some(10),
+            }],
+            procedures: vec![WarehouseProcedure {
+                warehouse_item_id: String::new(),
+                schema_name: "sales".to_string(),
+                procedure_name: "sp_orders".to_string(),
+                object_id_local: Some(100),
+                sql_body: Some("SELECT 1".to_string()),
+            }],
+        };
+        let cfg = test_source_cfg("AdventureWorks");
+        persist_sql_server_inventory(&conn, "ws-1", &cfg, &first, None, None).unwrap();
+
+        let second = SqlServerInventory {
+            container_id_local: Some(1),
+            schemas: vec![WarehouseSchema {
+                warehouse_item_id: String::new(),
+                schema_name: "finance".to_string(),
+                schema_id_local: Some(2),
+            }],
+            tables: vec![],
+            procedures: vec![],
+        };
+        persist_sql_server_inventory(&conn, "ws-1", &cfg, &second, None, None).unwrap();
+
+        let schema_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let table_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let procedure_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_procedures", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let schema_name: String = conn
+            .query_row(
+                "SELECT schema_name FROM warehouse_schemas LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(schema_count, 1);
+        assert_eq!(table_count, 0);
+        assert_eq!(procedure_count, 0);
+        assert_eq!(schema_name, "finance");
+    }
+
+    #[test]
+    fn persist_sql_server_inventory_requires_container_database_id() {
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-1", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        let cfg = test_source_cfg("AdventureWorks");
+        let inventory = SqlServerInventory {
+            container_id_local: None,
+            schemas: vec![WarehouseSchema {
+                warehouse_item_id: String::new(),
+                schema_name: "sales".to_string(),
+                schema_id_local: Some(1),
+            }],
+            tables: vec![],
+            procedures: vec![],
+        };
+
+        let err = persist_sql_server_inventory(&conn, "ws-1", &cfg, &inventory, None, None)
+            .expect_err("expected missing DB_ID() to fail persistence");
+        assert!(
+            err.to_string().contains("database_id"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn clear_migration_repo_contents_removes_all_children_and_keeps_root() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("migration-repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::create_dir_all(repo.join("models").join("silver")).unwrap();
+        fs::write(
+            repo.join(".git").join("config"),
+            "[core]\nrepositoryformatversion = 0\n",
+        )
+        .unwrap();
+        fs::write(repo.join("README.md"), "test").unwrap();
+        fs::write(
+            repo.join("models").join("silver").join("orders.sql"),
+            "select 1",
+        )
+        .unwrap();
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+
+        assert!(repo.exists());
+        assert!(repo.is_dir());
+        let entries: Vec<_> = fs::read_dir(&repo).unwrap().collect();
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn clear_migration_repo_contents_creates_missing_folder() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("missing-repo");
+        assert!(!repo.exists());
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+
+        assert!(repo.exists());
+        assert!(repo.is_dir());
+    }
+
+    #[test]
+    fn reset_flow_clears_sqlite_state_and_repo_contents() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("migration-repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::write(repo.join(".git").join("config"), "gitdir").unwrap();
+        fs::write(repo.join("README.md"), "content").unwrap();
+
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                "ws-reset",
+                "Workspace",
+                repo.to_str().unwrap(),
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                "source-db-ws-reset",
+                "ws-reset",
+                "WideWorldImportersDW",
+                "Warehouse"
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_schemas(warehouse_item_id, schema_name) VALUES (?1, ?2)",
+            rusqlite::params!["source-db-ws-reset", "Sales"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["source-db-ws-reset", "Sales", "Orders"],
+        )
+        .unwrap();
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+        clear_workspace_state(&conn).unwrap();
+
+        let workspaces: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
+            .unwrap();
+        let items: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
+            .unwrap();
+        let schemas: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let tables: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(workspaces, 0);
+        assert_eq!(items, 0);
+        assert_eq!(schemas, 0);
+        assert_eq!(tables, 0);
+
+        let entries: Vec<_> = fs::read_dir(&repo).unwrap().collect();
+        assert!(repo.exists());
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn reset_clears_apply_lifecycle_state_via_fk_cascade() {
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-cascade", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        // Legacy mirror/state branch (scope/planning dependencies)
+        conn.execute(
+            "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["item-1", "ws-cascade", "AdventureWorks", "Warehouse"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_schemas(warehouse_item_id, schema_name) VALUES (?1, ?2)",
+            rusqlite::params!["item-1", "dbo"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["item-1", "dbo", "Orders"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["st-1", "ws-cascade", "item-1", "dbo", "Orders"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO table_config(selected_table_id, table_type) VALUES (?1, ?2)",
+            rusqlite::params!["st-1", "fact"],
+        )
+        .unwrap();
+
+        // Canonical source branch (apply-discovered source metadata)
+        conn.execute(
+            "INSERT INTO sources(id, workspace_id, source_type, external_source_id, display_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["source-1", "ws-cascade", "sql_server", "sql_server://localhost:1433/db", "db"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO containers(id, source_id, container_type, external_container_id, container_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["container-1", "source-1", "database", "1", "db"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO namespaces(id, container_id, namespace_name, external_namespace_id) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ns-1", "container-1", "dbo", "1"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO data_objects(id, namespace_id, object_name, object_type, external_object_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["obj-1", "ns-1", "Orders", "table", "42"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sqlserver_object_columns(id, data_object_id, column_name, column_id) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["col-1", "obj-1", "OrderId", 1],
+        )
+        .unwrap();
+
+        clear_workspace_state(&conn).unwrap();
+
+        let tables = [
+            "workspaces",
+            "items",
+            "warehouse_schemas",
+            "warehouse_tables",
+            "selected_tables",
+            "table_config",
+            "sources",
+            "containers",
+            "namespaces",
+            "data_objects",
+            "sqlserver_object_columns",
+        ];
+        for table in tables {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(count, 0, "expected table '{table}' to be empty after reset");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires reachable SQL Server (e.g. Docker)"]
+    fn sql_server_inventory_populates_sqlite_on_apply_path() {
+        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port: u16 = std::env::var("MIGRATION_TEST_SQL_SERVER_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(1433);
+        let username =
+            std::env::var("MIGRATION_TEST_SQL_SERVER_USER").unwrap_or_else(|_| "sa".to_string());
+        let password = std::env::var("MIGRATION_TEST_SQL_SERVER_PASSWORD")
+            .unwrap_or_else(|_| "YourStrong!Passw0rd".to_string());
+        let database = std::env::var("MIGRATION_TEST_SQL_SERVER_DATABASE")
+            .unwrap_or_else(|_| "WideWorldImportersDW".to_string());
+
+        let mut config = Config::new();
+        config.host(&host);
+        config.port(port);
+        config.database(&database);
+        config.authentication(AuthMethod::sql_server(&username, &password));
+        config.encryption(EncryptionLevel::Off);
+        config.trust_cert();
+
+        let rt = RuntimeBuilder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
+
+        let (container_id_local, schemas, tables, procedures) = rt.block_on(async {
+            let tcp = TcpStream::connect(config.get_addr())
+                .await
+                .expect("failed to connect to SQL Server");
+            tcp.set_nodelay(true).expect("failed to set TCP nodelay");
+            let mut client = Client::connect(config, tcp.compat_write())
+                .await
+                .expect("failed to authenticate to SQL Server");
+
+            let schemas_sql = resolve_source_query("sql_server", SourceQuery::DiscoverSchemas)
+                .expect("missing schemas query");
+            let tables_sql = resolve_source_query("sql_server", SourceQuery::DiscoverTables)
+                .expect("missing tables query");
+            let procedures_sql =
+                resolve_source_query("sql_server", SourceQuery::DiscoverProcedures)
+                    .expect("missing procedures query");
+            let container_id_sql =
+                resolve_source_query("sql_server", SourceQuery::DiscoverContainerId)
+                    .expect("missing container id query");
+
+            let container_rows = client
+                .simple_query(container_id_sql)
+                .await
+                .expect("container id query failed")
+                .into_first_result()
+                .await
+                .expect("container id result parse failed");
+            let container_id_local = container_rows.first().and_then(|row| row.get::<i64, _>(0));
+
+            let schema_rows = client
+                .simple_query(schemas_sql)
+                .await
+                .expect("schema query failed")
+                .into_first_result()
+                .await
+                .expect("schema result parse failed");
+            let table_rows = client
+                .simple_query(tables_sql)
+                .await
+                .expect("table query failed")
+                .into_first_result()
+                .await
+                .expect("table result parse failed");
+            let procedure_rows = client
+                .simple_query(procedures_sql)
+                .await
+                .expect("procedure query failed")
+                .into_first_result()
+                .await
+                .expect("procedure result parse failed");
+
+            let schemas: Vec<WarehouseSchema> = schema_rows
+                .into_iter()
+                .filter_map(|row| {
+                    row.get::<&str, _>(1).map(|schema_name| WarehouseSchema {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        schema_id_local: row.get::<i64, _>(0),
+                    })
+                })
+                .collect();
+            let tables: Vec<WarehouseTable> = table_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let schema_name = row.get::<&str, _>(0)?;
+                    let table_name = row.get::<&str, _>(1)?;
+                    Some(WarehouseTable {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        table_name: table_name.to_string(),
+                        object_id_local: row.get::<i64, _>(2),
+                    })
+                })
+                .collect();
+            let procedures: Vec<WarehouseProcedure> = procedure_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let schema_name = row.get::<&str, _>(0)?;
+                    let procedure_name = row.get::<&str, _>(1)?;
+                    Some(WarehouseProcedure {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        procedure_name: procedure_name.to_string(),
+                        object_id_local: row.get::<i64, _>(2),
+                        sql_body: row.get::<&str, _>(3).map(|v| v.to_string()),
+                    })
+                })
+                .collect();
+
+            (container_id_local, schemas, tables, procedures)
+        });
+
+        assert!(
+            container_id_local.is_some(),
+            "expected DB_ID() to return current database id"
+        );
+        assert!(!schemas.is_empty(), "expected schemas from SQL Server");
+        assert!(!tables.is_empty(), "expected tables from SQL Server");
+        assert!(
+            !procedures.is_empty(),
+            "expected procedures from SQL Server"
+        );
+
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-live", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        let cfg = test_source_cfg(&database);
+        let inventory = SqlServerInventory {
+            container_id_local,
+            schemas,
+            tables,
+            procedures,
+        };
+        persist_sql_server_inventory(&conn, "ws-live", &cfg, &inventory, None, None).unwrap();
+
+        let items_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
+            .unwrap();
+        let schemas_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let tables_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let procedures_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_procedures", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let db_item_name: String = conn
+            .query_row("SELECT display_name FROM items LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let sources_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sources", [], |row| row.get(0))
+            .unwrap();
+        let namespaces_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM namespaces", [], |row| row.get(0))
+            .unwrap();
+        let data_objects_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM data_objects", [], |row| row.get(0))
+            .unwrap();
+        let container_external_id: String = conn
+            .query_row(
+                "SELECT external_container_id FROM containers LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(items_count, 1);
+        assert!(schemas_count > 0);
+        assert!(tables_count > 0);
+        assert!(procedures_count > 0);
+        assert_eq!(db_item_name, database);
+        assert_eq!(sources_count, 1);
+        assert!(namespaces_count > 0);
+        assert!(data_objects_count > 0);
+        assert_eq!(
+            container_external_id,
+            container_id_local.unwrap().to_string()
+        );
     }
 }

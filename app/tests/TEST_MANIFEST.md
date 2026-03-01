@@ -32,6 +32,7 @@ Maps source files to tests. Update when adding new Rust commands or E2E specs.
 | `e2e/home/home.spec.ts` | `@home` | Home states, navigation CTAs, root redirect |
 | `e2e/settings/settings.spec.ts` | `@settings` | Settings layout and locked-state behavior |
 | `e2e/monitor/monitor.spec.ts` | `@monitor` | Monitor launch flow and log stream output |
+| `e2e/workspace/workspace.spec.ts` | `@workspace` | Workspace apply lock + reset unlock flow |
 
 ## Shared Infrastructure
 

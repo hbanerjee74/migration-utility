@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import WorkspaceTab from '../../routes/settings/workspace-tab';
-import { makeWorkspace } from '../../test/fixtures';
 import { mockInvoke, mockInvokeCommands, resetTauriMocks } from '../../test/mocks/tauri';
 import { useWorkflowStore } from '../../stores/workflow-store';
 
@@ -25,7 +24,16 @@ describe('WorkspaceTab (Settings)', () => {
     mockInvokeCommands({
       workspace_get: null,
       github_list_repos: [],
-      workspace_apply_and_clone: makeWorkspace(),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks', 'master'],
       workspace_reset_state: undefined,
@@ -81,7 +89,16 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     mockInvokeCommands({
       workspace_get: null,
-      workspace_apply_and_clone: makeWorkspace(),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -97,10 +114,8 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
 
-    const repoInput = screen.getByTestId('input-repo-name');
-    await user.click(repoInput);
-    await user.type(repoInput, 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.click(screen.getByTestId('input-repo-name'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
 
     expect(apply).toBeDisabled();
 
@@ -183,7 +198,16 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     mockInvokeCommands({
       workspace_get: null,
-      workspace_apply_and_clone: makeWorkspace({ migrationRepoName: 'acme/data-platform' }),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -196,8 +220,7 @@ describe('WorkspaceTab (Settings)', () => {
     await user.type(screen.getByTestId('input-source-password'), 'secret');
     await user.click(screen.getByTestId('btn-pick-repo-path'));
     await user.click(screen.getByTestId('input-repo-name'));
-    await user.type(screen.getByTestId('input-repo-name'), 'ac');
-    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
     await user.click(screen.getByTestId('btn-test-connection'));
 
     await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
@@ -213,6 +236,63 @@ describe('WorkspaceTab (Settings)', () => {
       expect(screen.getByTestId('btn-apply')).toBeDisabled();
       expect(screen.getByTestId('btn-test-connection')).toBeDisabled();
       expect(screen.getByTestId('btn-pick-repo-path')).toBeDisabled();
+    });
+  });
+
+  it('apply button sends SQL Server source payload', async () => {
+    const user = userEvent.setup();
+    mockInvokeCommands({
+      workspace_get: null,
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
+      workspace_test_source_connection: 'Connection successful',
+      workspace_discover_source_databases: ['AdventureWorks'],
+      github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
+      workspace_reset_state: undefined,
+    });
+    renderPage();
+
+    await user.type(screen.getByTestId('input-source-server'), 'sql.acme.local');
+    await user.clear(screen.getByTestId('input-source-port'));
+    await user.type(screen.getByTestId('input-source-port'), '1433');
+    await user.type(screen.getByTestId('input-source-username'), 'sa');
+    await user.type(screen.getByTestId('input-source-password'), 'secret');
+    await user.click(screen.getByTestId('btn-pick-repo-path'));
+    await user.click(screen.getByTestId('input-repo-name'));
+    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
+    await user.click(screen.getByTestId('btn-test-connection'));
+    await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
+
+    await user.click(screen.getByTestId('btn-apply'));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('workspace_apply_start', {
+        args: {
+          name: 'Migration Workspace',
+          migrationRepoName: 'acme/data-platform',
+          migrationRepoPath: '/selected/path',
+          fabricUrl: null,
+          fabricServicePrincipalId: null,
+          fabricServicePrincipalSecret: null,
+          sourceType: 'sql_server',
+          sourceServer: 'sql.acme.local',
+          sourceDatabase: 'AdventureWorks',
+          sourcePort: 1433,
+          sourceAuthenticationMode: 'sql_password',
+          sourceUsername: 'sa',
+          sourcePassword: 'secret',
+          sourceEncrypt: true,
+          sourceTrustServerCertificate: false,
+        },
+      });
     });
   });
 
