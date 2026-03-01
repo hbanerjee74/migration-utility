@@ -13,7 +13,6 @@ import {
   githubListRepos,
   workspaceApplyStart,
   workspaceApplyStatus,
-  workspaceCancelApply,
   workspaceGet,
   workspaceResetState,
   workspaceTestSourceConnection,
@@ -103,7 +102,6 @@ export default function WorkspaceTab() {
   const [applyProgressMessage, setApplyProgressMessage] = useState<string | null>(null);
   const [applyProgressPercent, setApplyProgressPercent] = useState<number>(0);
   const [resetError, setResetError] = useState<string | null>(null);
-  const cancelApplyRef = useRef(false);
   const progressTimerRef = useRef<number | null>(null);
   const applyJobIdRef = useRef<string | null>(null);
   const applyPollerRef = useRef<number | null>(null);
@@ -282,7 +280,6 @@ export default function WorkspaceTab() {
     const sourcePasswordValue = sourcePassword.trim();
 
     setApplying(true);
-    cancelApplyRef.current = false;
     setApplyError(null);
     setApplySuccessMessage(null);
     setApplyProgressMessage('Validating source access...');
@@ -341,13 +338,8 @@ export default function WorkspaceTab() {
           return;
         }
 
-        if (status.state === 'cancelled') {
-          logger.info('workspace apply cancelled by user');
-          setApplyError('Apply cancelled. No source settings were committed.');
-        } else {
-          logger.error('workspace apply failed');
-          setApplyError(status.error ?? 'Apply failed');
-        }
+        logger.error('workspace apply failed');
+        setApplyError(status.error ?? 'Apply failed');
         setApplyProgressMessage(null);
         setApplyProgressPercent(0);
         setApplying(false);
@@ -359,29 +351,11 @@ export default function WorkspaceTab() {
       }, 600);
     } catch (err) {
       const message = getErrorMessage(err);
-      if (cancelApplyRef.current || message.toLowerCase().includes('cancelled')) {
-        logger.info('workspace apply cancelled by user');
-        setApplyError('Apply cancelled. No source settings were committed.');
-      } else {
-        logger.error('workspace apply failed', err);
-        setApplyError(message);
-      }
+      logger.error('workspace apply failed', err);
+      setApplyError(message);
       setApplyProgressMessage(null);
       setApplyProgressPercent(0);
       setApplying(false);
-    } finally {
-      cancelApplyRef.current = false;
-    }
-  }
-
-  async function handleCancelApply() {
-    cancelApplyRef.current = true;
-    try {
-      await workspaceCancelApply();
-      setApplyProgressMessage('Cancelling apply...');
-    } catch (err) {
-      logger.error('workspace apply cancel failed', err);
-      setApplyError(getErrorMessage(err));
     }
   }
 
@@ -863,17 +837,6 @@ export default function WorkspaceTab() {
           >
             {applying ? 'Applying…' : 'Apply'}
           </Button>
-          {applying ? (
-            <Button
-              type="button"
-              data-testid="btn-cancel-apply"
-              onClick={() => void handleCancelApply()}
-              variant="outline"
-              size="sm"
-            >
-              Cancel
-            </Button>
-          ) : null}
         </div>
 
         <Card className="gap-0 py-5 border-destructive/40" data-testid="settings-workspace-danger-zone">

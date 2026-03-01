@@ -34,7 +34,6 @@ describe('WorkspaceTab (Settings)', () => {
         message: 'Apply completed.',
         error: null,
       },
-      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks', 'master'],
       workspace_reset_state: undefined,
@@ -100,7 +99,6 @@ describe('WorkspaceTab (Settings)', () => {
         message: 'Apply completed.',
         error: null,
       },
-      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -210,7 +208,6 @@ describe('WorkspaceTab (Settings)', () => {
         message: 'Apply completed.',
         error: null,
       },
-      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -256,7 +253,6 @@ describe('WorkspaceTab (Settings)', () => {
         message: 'Apply completed.',
         error: null,
       },
-      workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
@@ -297,60 +293,6 @@ describe('WorkspaceTab (Settings)', () => {
           sourceTrustServerCertificate: false,
         },
       });
-    });
-  });
-
-  it('shows apply progress and allows cancel while apply is running', async () => {
-    const user = userEvent.setup();
-    let statusPollCount = 0;
-
-    mockInvoke.mockImplementation((cmd: string) => {
-      if (cmd === 'workspace_get') return Promise.resolve(null);
-      if (cmd === 'github_list_repos')
-        return Promise.resolve([{ id: 1, fullName: 'acme/data-platform', private: true }]);
-      if (cmd === 'workspace_test_source_connection') return Promise.resolve('Connection successful');
-      if (cmd === 'workspace_discover_source_databases') return Promise.resolve(['AdventureWorks']);
-      if (cmd === 'workspace_apply_start') return Promise.resolve('job-1');
-      if (cmd === 'workspace_apply_status') {
-        statusPollCount += 1;
-        return Promise.resolve({
-          jobId: 'job-1',
-          state: statusPollCount < 4 ? 'running' : 'cancelled',
-          isAlive: statusPollCount < 4,
-          stage: 'importing_tables',
-          percent: 65,
-          message: statusPollCount < 4 ? 'Importing source tables...' : 'Apply cancelled.',
-          error: statusPollCount < 4 ? null : 'Apply cancelled by user',
-        });
-      }
-      if (cmd === 'workspace_cancel_apply') return Promise.resolve(undefined);
-      if (cmd === 'workspace_reset_state') return Promise.resolve(undefined);
-      return Promise.reject(new Error(`Unmocked command: ${cmd}`));
-    });
-
-    renderPage();
-
-    await user.type(screen.getByTestId('input-source-server'), 'sql.acme.local');
-    await user.type(screen.getByTestId('input-source-username'), 'sa');
-    await user.type(screen.getByTestId('input-source-password'), 'secret');
-    await user.click(screen.getByTestId('btn-pick-repo-path'));
-    await user.click(screen.getByTestId('input-repo-name'));
-    await user.selectOptions(screen.getByTestId('input-repo-name'), 'acme/data-platform');
-    await user.click(screen.getByTestId('btn-test-connection'));
-    await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
-
-    await user.click(screen.getByTestId('btn-apply'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('workspace-apply-progress')).toHaveTextContent(
-        'Importing source tables...',
-      );
-      expect(screen.getByTestId('btn-cancel-apply')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByTestId('btn-cancel-apply'));
-    await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('workspace_cancel_apply');
     });
   });
 

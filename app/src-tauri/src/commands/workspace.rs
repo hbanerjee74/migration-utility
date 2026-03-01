@@ -22,7 +22,6 @@ use crate::db::DbState;
 use crate::source_sql::{resolve_source_query, should_log_source_sql, SourceQuery};
 use crate::types::{CommandError, WarehouseProcedure, WarehouseSchema, WarehouseTable, Workspace};
 
-static WORKSPACE_APPLY_CANCELLED: AtomicBool = AtomicBool::new(false);
 static WORKSPACE_APPLY_RUNNING: AtomicBool = AtomicBool::new(false);
 static WORKSPACE_APPLY_JOBS: LazyLock<Mutex<HashMap<String, WorkspaceApplyJobStatus>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -283,13 +282,6 @@ fn emit_apply_progress(
     }
 }
 
-fn check_apply_cancelled() -> Result<(), CommandError> {
-    if WORKSPACE_APPLY_CANCELLED.load(Ordering::SeqCst) {
-        return Err(CommandError::Io("Apply cancelled by user".to_string()));
-    }
-    Ok(())
-}
-
 fn set_job_status(
     job_id: &str,
     state: &str,
@@ -399,7 +391,6 @@ fn fetch_sql_server_inventory(
 
     let config = build_tiberius_config(cfg);
     runtime.block_on(async move {
-        check_apply_cancelled()?;
         let tcp = TcpStream::connect(config.get_addr()).await.map_err(|e| {
             log::error!("workspace_apply_and_clone: failed to connect tcp: {e}");
             CommandError::Io(format!("Could not connect to source endpoint: {e}"))
@@ -416,7 +407,6 @@ fn fetch_sql_server_inventory(
                 CommandError::Io(format!("Connection test failed: {e}"))
             })?;
 
-        check_apply_cancelled()?;
         let container_id_query =
             resolve_source_query(&cfg.source_type, SourceQuery::DiscoverContainerId)?;
         if should_log_source_sql() {
@@ -442,7 +432,6 @@ fn fetch_sql_server_inventory(
             })?;
         let container_id_local = container_rows.first().and_then(|row| row.get::<i64, _>(0));
 
-        check_apply_cancelled()?;
         emit_apply_progress(
             app,
             job_id,
@@ -475,7 +464,6 @@ fn fetch_sql_server_inventory(
 
         let mut schemas: Vec<WarehouseSchema> = Vec::with_capacity(schema_rows.len());
         for row in schema_rows {
-            check_apply_cancelled()?;
             let schema_name = row
                 .get::<&str, _>(1)
                 .ok_or_else(|| {
@@ -489,7 +477,6 @@ fn fetch_sql_server_inventory(
             });
         }
 
-        check_apply_cancelled()?;
         emit_apply_progress(
             app,
             job_id,
@@ -522,7 +509,6 @@ fn fetch_sql_server_inventory(
 
         let mut tables: Vec<WarehouseTable> = Vec::with_capacity(table_rows.len());
         for row in table_rows {
-            check_apply_cancelled()?;
             let schema_name = row
                 .get::<&str, _>(0)
                 .ok_or_else(|| {
@@ -543,7 +529,6 @@ fn fetch_sql_server_inventory(
             });
         }
 
-        check_apply_cancelled()?;
         emit_apply_progress(
             app,
             job_id,
@@ -577,7 +562,6 @@ fn fetch_sql_server_inventory(
 
         let mut procedures: Vec<WarehouseProcedure> = Vec::with_capacity(procedure_rows.len());
         for row in procedure_rows {
-            check_apply_cancelled()?;
             let schema_name = row
                 .get::<&str, _>(0)
                 .ok_or_else(|| {
@@ -806,7 +790,6 @@ fn persist_sql_server_inventory(
     let mut imported_objects = 0usize;
 
     for schema in &inventory.schemas {
-        check_apply_cancelled()?;
         tx.execute(
             "INSERT OR REPLACE INTO warehouse_schemas(warehouse_item_id, schema_name, schema_id_local)
              VALUES (?1, ?2, ?3)",
@@ -820,7 +803,6 @@ fn persist_sql_server_inventory(
         maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
     }
     for table in &inventory.tables {
-        check_apply_cancelled()?;
         tx.execute(
             "INSERT OR REPLACE INTO warehouse_tables(warehouse_item_id, schema_name, table_name, object_id_local)
              VALUES (?1, ?2, ?3, ?4)",
@@ -834,7 +816,6 @@ fn persist_sql_server_inventory(
         maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
     }
     for procedure in &inventory.procedures {
-        check_apply_cancelled()?;
         tx.execute(
             "INSERT OR REPLACE INTO warehouse_procedures(warehouse_item_id, schema_name, procedure_name, object_id_local, sql_body)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1147,7 +1128,6 @@ fn run_workspace_apply_with_conn(
     }
     validate_source_type(&args.source_type)?;
     let source_cfg = require_sql_server_source(&args)?;
-    WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
 
     let token = {
         let settings = crate::db::read_settings(conn).map_err(CommandError::Io)?;
@@ -1164,7 +1144,6 @@ fn run_workspace_apply_with_conn(
         "Validating source connectivity and access...",
     );
     let inventory = fetch_sql_server_inventory(&source_cfg, app, job_id)?;
-    check_apply_cancelled()?;
 
     emit_apply_progress(
         app,
@@ -1177,7 +1156,6 @@ fn run_workspace_apply_with_conn(
         log::error!("workspace_apply_and_clone: failed: {}", e);
         return Err(e);
     }
-    check_apply_cancelled()?;
 
     emit_apply_progress(
         app,
@@ -1187,7 +1165,6 @@ fn run_workspace_apply_with_conn(
         "Persisting source settings...",
     );
     let workspace = upsert_workspace(conn, &args, &repo_name, &repo_path)?;
-    check_apply_cancelled()?;
     emit_apply_progress(
         app,
         job_id,
@@ -1205,7 +1182,6 @@ fn run_workspace_apply_with_conn(
     )?;
 
     emit_apply_progress(app, job_id, "completed", 100, "Apply completed.");
-    WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
     Ok(workspace)
 }
 
@@ -1223,7 +1199,6 @@ pub fn workspace_apply_start(
         ));
     }
 
-    WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
     let job_id = Uuid::new_v4().to_string();
     set_job_status(
         &job_id,
@@ -1261,29 +1236,17 @@ pub fn workspace_apply_start(
             ),
             Err(e) => {
                 let message = e.to_string();
-                if message.to_ascii_lowercase().contains("cancelled") {
-                    set_job_status(
-                        &job_id_for_thread,
-                        "cancelled",
-                        Some("cancelled"),
-                        0,
-                        Some("Apply cancelled.".to_string()),
-                        Some(message),
-                    );
-                } else {
-                    set_job_status(
-                        &job_id_for_thread,
-                        "failed",
-                        Some("failed"),
-                        0,
-                        Some("Apply failed.".to_string()),
-                        Some(message),
-                    );
-                }
+                set_job_status(
+                    &job_id_for_thread,
+                    "failed",
+                    Some("failed"),
+                    0,
+                    Some("Apply failed.".to_string()),
+                    Some(message),
+                );
             }
         }
         WORKSPACE_APPLY_RUNNING.store(false, Ordering::SeqCst);
-        WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
     });
 
     Ok(job_id)
@@ -1295,13 +1258,6 @@ pub fn workspace_apply_status(job_id: String) -> Result<WorkspaceApplyJobStatus,
     jobs.get(&job_id)
         .cloned()
         .ok_or_else(|| CommandError::NotFound(format!("Apply job not found: {job_id}")))
-}
-
-#[tauri::command]
-pub fn workspace_cancel_apply() -> Result<(), CommandError> {
-    log::info!("workspace_cancel_apply");
-    WORKSPACE_APPLY_CANCELLED.store(true, Ordering::SeqCst);
-    Ok(())
 }
 
 fn clone_repo_if_needed(repo_name: &str, repo_path: &str, token: &str) -> Result<(), CommandError> {

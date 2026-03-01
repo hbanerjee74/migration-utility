@@ -18,7 +18,6 @@ const mockResponses: Record<string, unknown> = {
     message: "Apply completed.",
     error: null,
   },
-  workspace_cancel_apply: undefined,
   workspace_test_source_connection: "Connection successful",
   workspace_discover_source_databases: ["master"],
   workspace_reset_state: undefined,
@@ -93,6 +92,9 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     | undefined;
   if (overrides && cmd in overrides) {
     const val = overrides[cmd];
+    if (typeof val === "function") {
+      return (val as (args?: Record<string, unknown>) => T | Promise<T>)(args);
+    }
     if (val instanceof Error) throw val;
     return val as T;
   }

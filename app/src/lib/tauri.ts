@@ -38,9 +38,6 @@ export const workspaceApplyStart = (args: ApplyWorkspaceArgs) =>
 export const workspaceApplyStatus = (jobId: string) =>
   invoke<WorkspaceApplyJobStatus>('workspace_apply_status', { jobId });
 
-export const workspaceCancelApply = () =>
-  invoke<void>('workspace_cancel_apply');
-
 export const workspaceResetState = () =>
   invoke<void>('workspace_reset_state');
 
