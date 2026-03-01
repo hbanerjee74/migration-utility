@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::db::DbState;
-use crate::types::AppSettings;
+use crate::types::{AppPhase, AppPhaseState, AppSettings};
 
 #[tauri::command]
 pub fn get_settings(state: State<'_, DbState>) -> Result<AppSettings, String> {
@@ -25,7 +25,59 @@ pub fn save_anthropic_api_key(
     })?;
     let mut settings = crate::db::read_settings(&conn)?;
     settings.anthropic_api_key = api_key;
-    crate::db::write_settings(&conn, &settings)
+    crate::db::write_settings(&conn, &settings)?;
+    let _ = crate::db::reconcile_and_persist_app_phase(&conn)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn app_hydrate_phase(state: State<'_, DbState>) -> Result<AppPhaseState, String> {
+    log::info!("[app_hydrate_phase]");
+    let conn = state.0.lock().map_err(|e| {
+        log::error!("[app_hydrate_phase] Failed to acquire DB lock: {}", e);
+        e.to_string()
+    })?;
+    crate::db::reconcile_and_persist_app_phase(&conn)
+}
+
+#[tauri::command]
+pub fn app_set_phase(
+    state: State<'_, DbState>,
+    app_phase: String,
+) -> Result<AppPhaseState, String> {
+    log::info!("[app_set_phase] {}", app_phase);
+    let conn = state.0.lock().map_err(|e| {
+        log::error!("[app_set_phase] Failed to acquire DB lock: {}", e);
+        e.to_string()
+    })?;
+    let phase = AppPhase::from_str(app_phase.as_str())
+        .ok_or_else(|| format!("Unsupported app phase: {}", app_phase))?;
+    crate::db::write_app_phase(&conn, phase)?;
+    crate::db::read_current_app_phase_state(&conn)
+}
+
+#[tauri::command]
+pub fn app_set_phase_flags(
+    state: State<'_, DbState>,
+    scope_finalized: Option<bool>,
+    plan_finalized: Option<bool>,
+) -> Result<AppPhaseState, String> {
+    log::info!(
+        "[app_set_phase_flags] scope_finalized={:?} plan_finalized={:?}",
+        scope_finalized,
+        plan_finalized
+    );
+    let conn = state.0.lock().map_err(|e| {
+        log::error!("[app_set_phase_flags] Failed to acquire DB lock: {}", e);
+        e.to_string()
+    })?;
+    if let Some(value) = scope_finalized {
+        crate::db::write_scope_finalized(&conn, value)?;
+    }
+    if let Some(value) = plan_finalized {
+        crate::db::write_plan_finalized(&conn, value)?;
+    }
+    crate::db::reconcile_and_persist_app_phase(&conn)
 }
 
 #[tauri::command]

@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { GitHubLoginDialog } from '@/components/github-login-dialog';
 import SettingsPanelShell from '@/components/settings/settings-panel-shell';
-import { getSettings, saveAnthropicApiKey, testApiKey } from '@/lib/tauri';
+import { appHydratePhase, getSettings, saveAnthropicApiKey, testApiKey } from '@/lib/tauri';
 import { logger } from '@/lib/logger';
 
 export default function ConnectionsTab() {
-  const migrationStatus = useWorkflowStore((s) => s.migrationStatus);
-  const isLocked = migrationStatus === 'running';
+  const appPhase = useWorkflowStore((s) => s.appPhase);
+  const setAppPhaseState = useWorkflowStore((s) => s.setAppPhaseState);
+  const isLocked = appPhase === 'running_locked';
 
   const { user, isLoggedIn, isLoading: isAuthLoading, lastCheckedAt, loadUser, logout } = useAuthStore();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
@@ -40,6 +41,8 @@ export default function ConnectionsTab() {
   async function handleSaveApiKey(nextValue: string) {
     try {
       await saveAnthropicApiKey(nextValue.trim() ? nextValue.trim() : null);
+      const phase = await appHydratePhase();
+      setAppPhaseState(phase);
       logger.info('settings: anthropic API key saved');
     } catch (err) {
       logger.error('save_anthropic_api_key failed', err);

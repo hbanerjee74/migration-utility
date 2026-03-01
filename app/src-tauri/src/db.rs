@@ -3,7 +3,7 @@ use std::{path::Path, sync::Mutex};
 use rusqlite::Connection;
 use thiserror::Error;
 
-use crate::types::AppSettings;
+use crate::types::{AppPhase, AppPhaseState, AppSettings};
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -14,6 +14,10 @@ pub enum DbError {
 }
 
 pub struct DbState(pub Mutex<Connection>);
+
+const APP_PHASE_KEY: &str = "app_phase";
+const SCOPE_FINALIZED_KEY: &str = "scope_finalized";
+const PLAN_FINALIZED_KEY: &str = "plan_finalized";
 
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/001_initial_schema.sql")),
@@ -114,6 +118,125 @@ pub fn write_settings(conn: &Connection, settings: &AppSettings) -> Result<(), S
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn read_settings_value(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+        row.get(0)
+    })
+    .map(Some)
+    .or_else(|err| match err {
+        rusqlite::Error::QueryReturnedNoRows => Ok(None),
+        _ => Err(err),
+    })
+    .map_err(|e| e.to_string())
+}
+
+fn write_settings_value(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        [key, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn read_bool_flag(conn: &Connection, key: &str) -> Result<bool, String> {
+    let raw = read_settings_value(conn, key)?;
+    Ok(matches!(
+        raw.as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    ))
+}
+
+fn write_bool_flag(conn: &Connection, key: &str, value: bool) -> Result<(), String> {
+    write_settings_value(conn, key, if value { "1" } else { "0" })
+}
+
+pub fn read_scope_finalized(conn: &Connection) -> Result<bool, String> {
+    read_bool_flag(conn, SCOPE_FINALIZED_KEY)
+}
+
+pub fn write_scope_finalized(conn: &Connection, finalized: bool) -> Result<(), String> {
+    write_bool_flag(conn, SCOPE_FINALIZED_KEY, finalized)
+}
+
+pub fn read_plan_finalized(conn: &Connection) -> Result<bool, String> {
+    read_bool_flag(conn, PLAN_FINALIZED_KEY)
+}
+
+pub fn write_plan_finalized(conn: &Connection, finalized: bool) -> Result<(), String> {
+    write_bool_flag(conn, PLAN_FINALIZED_KEY, finalized)
+}
+
+pub fn read_app_phase(conn: &Connection) -> Result<Option<AppPhase>, String> {
+    let raw = read_settings_value(conn, APP_PHASE_KEY)?;
+    let phase = raw.and_then(|v| AppPhase::from_str(v.as_str()));
+    Ok(phase)
+}
+
+pub fn write_app_phase(conn: &Connection, phase: AppPhase) -> Result<(), String> {
+    write_settings_value(conn, APP_PHASE_KEY, phase.as_str())
+}
+
+fn read_phase_facts(conn: &Connection) -> Result<AppPhaseState, String> {
+    let settings = read_settings(conn)?;
+    let has_github_auth = settings
+        .github_oauth_token
+        .as_deref()
+        .is_some_and(|v| !v.trim().is_empty());
+    let has_anthropic_key = settings
+        .anthropic_api_key
+        .as_deref()
+        .is_some_and(|v| !v.trim().is_empty());
+    let is_source_applied: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let scope_finalized = read_scope_finalized(conn)?;
+    let plan_finalized = read_plan_finalized(conn)?;
+
+    Ok(AppPhaseState {
+        app_phase: AppPhase::SetupRequired,
+        has_github_auth,
+        has_anthropic_key,
+        is_source_applied,
+        scope_finalized,
+        plan_finalized,
+    })
+}
+
+pub fn read_current_app_phase_state(conn: &Connection) -> Result<AppPhaseState, String> {
+    let mut state = read_phase_facts(conn)?;
+    state.app_phase = read_app_phase(conn)?.unwrap_or(AppPhase::SetupRequired);
+    Ok(state)
+}
+
+pub fn reconcile_and_persist_app_phase(conn: &Connection) -> Result<AppPhaseState, String> {
+    let persisted_phase = read_app_phase(conn)?;
+    let mut state = read_phase_facts(conn)?;
+
+    let reconciled =
+        if !state.has_github_auth || !state.has_anthropic_key || !state.is_source_applied {
+            AppPhase::SetupRequired
+        } else if matches!(persisted_phase, Some(AppPhase::RunningLocked)) {
+            AppPhase::RunningLocked
+        } else if !state.scope_finalized {
+            AppPhase::ScopeEditable
+        } else if !state.plan_finalized {
+            AppPhase::PlanEditable
+        } else {
+            AppPhase::ReadyToRun
+        };
+
+    if persisted_phase != Some(reconciled) {
+        write_app_phase(conn, reconciled)?;
+    }
+    state.app_phase = reconciled;
+    Ok(state)
 }
 
 #[cfg(test)]
@@ -528,5 +651,80 @@ mod tests {
             "data_objects",
             "id",
         );
+    }
+
+    #[test]
+    fn reconcile_phase_prefers_setup_when_prereqs_missing() {
+        let conn = open_memory();
+        write_app_phase(&conn, AppPhase::RunningLocked).unwrap();
+
+        let state = reconcile_and_persist_app_phase(&conn).unwrap();
+        assert_eq!(state.app_phase, AppPhase::SetupRequired);
+    }
+
+    #[test]
+    fn reconcile_phase_returns_scope_editable_after_prereqs() {
+        let conn = open_memory();
+        let settings = AppSettings {
+            anthropic_api_key: Some("sk-ant-test".to_string()),
+            github_oauth_token: Some("gho_test".to_string()),
+            github_user_login: None,
+            github_user_avatar: None,
+            github_user_email: None,
+        };
+        write_settings(&conn, &settings).unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws-1", "ws", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        let state = reconcile_and_persist_app_phase(&conn).unwrap();
+        assert_eq!(state.app_phase, AppPhase::ScopeEditable);
+    }
+
+    #[test]
+    fn reconcile_phase_returns_ready_when_scope_and_plan_finalized() {
+        let conn = open_memory();
+        let settings = AppSettings {
+            anthropic_api_key: Some("sk-ant-test".to_string()),
+            github_oauth_token: Some("gho_test".to_string()),
+            github_user_login: None,
+            github_user_avatar: None,
+            github_user_email: None,
+        };
+        write_settings(&conn, &settings).unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws-1", "ws", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+        write_scope_finalized(&conn, true).unwrap();
+        write_plan_finalized(&conn, true).unwrap();
+
+        let state = reconcile_and_persist_app_phase(&conn).unwrap();
+        assert_eq!(state.app_phase, AppPhase::ReadyToRun);
+    }
+
+    #[test]
+    fn reconcile_phase_keeps_running_locked_when_prereqs_hold() {
+        let conn = open_memory();
+        let settings = AppSettings {
+            anthropic_api_key: Some("sk-ant-test".to_string()),
+            github_oauth_token: Some("gho_test".to_string()),
+            github_user_login: None,
+            github_user_avatar: None,
+            github_user_email: None,
+        };
+        write_settings(&conn, &settings).unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws-1", "ws", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+        write_app_phase(&conn, AppPhase::RunningLocked).unwrap();
+
+        let state = reconcile_and_persist_app_phase(&conn).unwrap();
+        assert_eq!(state.app_phase, AppPhase::RunningLocked);
     }
 }

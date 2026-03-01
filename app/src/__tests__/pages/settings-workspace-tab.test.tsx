@@ -19,6 +19,15 @@ function renderPage() {
 }
 
 describe('WorkspaceTab (Settings)', () => {
+  const phaseState = {
+    appPhase: 'scope_editable',
+    hasGithubAuth: true,
+    hasAnthropicKey: true,
+    isSourceApplied: true,
+    scopeFinalized: false,
+    planFinalized: false,
+  };
+
   beforeEach(() => {
     resetTauriMocks();
     mockInvokeCommands({
@@ -37,9 +46,11 @@ describe('WorkspaceTab (Settings)', () => {
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks', 'master'],
       workspace_reset_state: undefined,
+      app_hydrate_phase: phaseState,
     });
     useWorkflowStore.setState((s) => ({
       ...s,
+      appPhase: 'scope_editable',
       migrationStatus: 'idle',
       workspaceId: null,
     }));
@@ -103,6 +114,7 @@ describe('WorkspaceTab (Settings)', () => {
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
       workspace_reset_state: undefined,
+      app_hydrate_phase: phaseState,
     });
     renderPage();
 
@@ -212,6 +224,7 @@ describe('WorkspaceTab (Settings)', () => {
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
       workspace_reset_state: undefined,
+      app_hydrate_phase: phaseState,
     });
     renderPage();
 
@@ -257,6 +270,7 @@ describe('WorkspaceTab (Settings)', () => {
       workspace_discover_source_databases: ['AdventureWorks'],
       github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
       workspace_reset_state: undefined,
+      app_hydrate_phase: phaseState,
     });
     renderPage();
 

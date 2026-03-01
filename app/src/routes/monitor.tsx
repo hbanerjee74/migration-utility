@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
-import { monitorLaunchAgent } from '@/lib/tauri';
+import { appHydratePhase, appSetPhase, monitorLaunchAgent } from '@/lib/tauri';
 
 // ── Agent phases grid ─────────────────────────────────────────────────────────
 
@@ -176,7 +176,8 @@ function RunningState({ logText }: { logText: string }) {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function MonitorSurface() {
-  const { migrationStatus, setMigrationStatus } = useWorkflowStore();
+  const appPhase = useWorkflowStore((s) => s.appPhase);
+  const setAppPhaseState = useWorkflowStore((s) => s.setAppPhaseState);
   const [launching, setLaunching] = useState(false);
   const [logText, setLogText] = useState('');
   const activeRequestIdRef = useRef<string | null>(null);
@@ -231,7 +232,12 @@ export default function MonitorSurface() {
 
   async function handleLaunch() {
     setLaunching(true);
-    setMigrationStatus('running');
+    try {
+      const next = await appSetPhase('running_locked');
+      setAppPhaseState(next);
+    } catch (err) {
+      logger.error('monitor: failed to persist running_locked phase', err);
+    }
     activeRequestIdRef.current = null;
     hasStreamedResponseRef.current = false;
     setLogText('Launching sidecar agent...\n');
@@ -249,7 +255,12 @@ export default function MonitorSurface() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setLogText(`Agent launch failed: ${message}`);
-      setMigrationStatus('idle');
+      try {
+        const hydrated = await appHydratePhase();
+        setAppPhaseState(hydrated);
+      } catch (hydrateErr) {
+        logger.error('monitor: failed to rehydrate phase after launch error', hydrateErr);
+      }
       logger.error('monitor: migration launch failed', err);
     } finally {
       setLaunching(false);
@@ -258,7 +269,7 @@ export default function MonitorSurface() {
 
   return (
     <div className="h-full flex flex-col">
-      {migrationStatus === 'idle' || migrationStatus === 'complete'
+      {appPhase !== 'running_locked'
         ? <ReadyState onLaunch={() => void handleLaunch()} launching={launching} />
         : <RunningState logText={logText} />}
     </div>

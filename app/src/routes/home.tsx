@@ -45,8 +45,8 @@ const STEP_COUNTS: Record<string, string> = {
 
 function DashboardState() {
   const navigate = useNavigate();
-  const { workspaceId, migrationStatus } = useWorkflowStore();
-  const isRunning = migrationStatus === 'running';
+  const { workspaceId, appPhase } = useWorkflowStore();
+  const isRunning = appPhase === 'running_locked';
 
   return (
     <div className="flex-1 overflow-auto">
@@ -186,11 +186,11 @@ function DashboardState() {
 // ── Root ─────────────────────────────────────────────────────────────────────
 
 export default function HomeSurface() {
-  const { workspaceId } = useWorkflowStore();
+  const appPhase = useWorkflowStore((s) => s.appPhase);
 
   return (
     <div className="h-full flex flex-col">
-      {!workspaceId ? <SetupState /> : <DashboardState />}
+      {appPhase === 'setup_required' ? <SetupState /> : <DashboardState />}
     </div>
   );
 }

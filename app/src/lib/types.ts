@@ -88,6 +88,22 @@ export interface AppSettings {
   githubUserEmail: string | null;
 }
 
+export type AppPhase =
+  | 'setup_required'
+  | 'scope_editable'
+  | 'plan_editable'
+  | 'ready_to_run'
+  | 'running_locked';
+
+export interface AppPhaseState {
+  appPhase: AppPhase;
+  hasGithubAuth: boolean;
+  hasAnthropicKey: boolean;
+  isSourceApplied: boolean;
+  scopeFinalized: boolean;
+  planFinalized: boolean;
+}
+
 export type GitHubAuthResult =
   | { status: 'pending' }
   | { status: 'slow_down' }

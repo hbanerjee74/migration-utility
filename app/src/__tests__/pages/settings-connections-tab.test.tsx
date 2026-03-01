@@ -19,6 +19,14 @@ const MOCK_USER = {
   email: 'octocat@github.com',
 };
 const initialAuthState = useAuthStore.getState();
+const PHASE_STATE = {
+  appPhase: 'setup_required',
+  hasGithubAuth: false,
+  hasAnthropicKey: false,
+  isSourceApplied: false,
+  scopeFinalized: false,
+  planFinalized: false,
+};
 
 function renderTab() {
   return render(
@@ -45,7 +53,7 @@ beforeEach(() => {
 
 describe('ConnectionsTab — GitHub card', () => {
   it('shows Sign in button when not connected', async () => {
-    mockInvokeCommands({ github_get_user: null, get_settings: { anthropicApiKey: null } });
+    mockInvokeCommands({ github_get_user: null, get_settings: { anthropicApiKey: null }, app_hydrate_phase: PHASE_STATE });
     renderTab();
     await waitFor(() => {
       expect(screen.getByTestId('btn-connect-github')).toBeVisible();
@@ -58,7 +66,7 @@ describe('ConnectionsTab — GitHub card', () => {
   });
 
   it('shows github URL and Disconnect when connected', async () => {
-    mockInvokeCommands({ github_get_user: MOCK_USER, get_settings: { anthropicApiKey: null } });
+    mockInvokeCommands({ github_get_user: MOCK_USER, get_settings: { anthropicApiKey: null }, app_hydrate_phase: PHASE_STATE });
     renderTab();
     await waitFor(() => {
       expect(screen.getByText('@octocat')).toBeVisible();
@@ -68,7 +76,7 @@ describe('ConnectionsTab — GitHub card', () => {
     expect(screen.getByTestId('btn-disconnect-github')).toBeVisible();
   });
 
-  it('Disconnect button is disabled when migration is running', async () => {
+  it('Disconnect button is disabled when app phase is running_locked', async () => {
     useAuthStore.setState({
       user: MOCK_USER,
       isLoggedIn: true,
@@ -76,9 +84,9 @@ describe('ConnectionsTab — GitHub card', () => {
       lastCheckedAt: null,
       loadUser: async () => {},
     });
-    mockInvokeCommands({ github_get_user: MOCK_USER, get_settings: { anthropicApiKey: null } });
+    mockInvokeCommands({ github_get_user: MOCK_USER, get_settings: { anthropicApiKey: null }, app_hydrate_phase: PHASE_STATE });
     act(() => {
-      useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+      useWorkflowStore.setState((s) => ({ ...s, appPhase: 'running_locked' }));
     });
     renderTab();
     await waitFor(() => {
@@ -90,6 +98,7 @@ describe('ConnectionsTab — GitHub card', () => {
     mockInvokeCommands({
       github_get_user: new Promise(() => {}),
       get_settings: { anthropicApiKey: null },
+      app_hydrate_phase: PHASE_STATE,
     });
     renderTab();
     await waitFor(() => {
@@ -100,7 +109,7 @@ describe('ConnectionsTab — GitHub card', () => {
   });
 
   it('Anthropic key input and Update button are present', async () => {
-    mockInvokeCommands({ github_get_user: null, get_settings: { anthropicApiKey: null } });
+    mockInvokeCommands({ github_get_user: null, get_settings: { anthropicApiKey: null }, app_hydrate_phase: PHASE_STATE });
     renderTab();
     await waitFor(() => {
       expect(screen.getByTestId('input-anthropic-key')).toBeInTheDocument();

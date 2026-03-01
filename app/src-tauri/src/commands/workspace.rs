@@ -1184,6 +1184,9 @@ fn run_workspace_apply_with_conn(
         Some(app),
         Some(job_id),
     )?;
+    crate::db::write_scope_finalized(conn, false).map_err(CommandError::Io)?;
+    crate::db::write_plan_finalized(conn, false).map_err(CommandError::Io)?;
+    let _ = crate::db::reconcile_and_persist_app_phase(conn).map_err(CommandError::Io)?;
 
     emit_apply_progress(app, job_id, "completed", 100, "Apply completed.");
     Ok(workspace)
@@ -1560,7 +1563,11 @@ pub fn workspace_reset_state(state: State<DbState>) -> Result<(), CommandError> 
         clear_migration_repo_contents(&path)?;
     }
 
-    clear_workspace_state(&conn)
+    clear_workspace_state(&conn)?;
+    crate::db::write_scope_finalized(&conn, false).map_err(CommandError::Io)?;
+    crate::db::write_plan_finalized(&conn, false).map_err(CommandError::Io)?;
+    let _ = crate::db::reconcile_and_persist_app_phase(&conn).map_err(CommandError::Io)?;
+    Ok(())
 }
 
 #[tauri::command]
