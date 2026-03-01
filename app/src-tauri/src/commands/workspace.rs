@@ -2104,6 +2104,92 @@ mod tests {
     }
 
     #[test]
+    fn reset_clears_apply_lifecycle_state_via_fk_cascade() {
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-cascade", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        // Legacy mirror/state branch (scope/planning dependencies)
+        conn.execute(
+            "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["item-1", "ws-cascade", "AdventureWorks", "Warehouse"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_schemas(warehouse_item_id, schema_name) VALUES (?1, ?2)",
+            rusqlite::params!["item-1", "dbo"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["item-1", "dbo", "Orders"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["st-1", "ws-cascade", "item-1", "dbo", "Orders"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO table_config(selected_table_id, table_type) VALUES (?1, ?2)",
+            rusqlite::params!["st-1", "fact"],
+        )
+        .unwrap();
+
+        // Canonical source branch (apply-discovered source metadata)
+        conn.execute(
+            "INSERT INTO sources(id, workspace_id, source_type, external_source_id, display_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["source-1", "ws-cascade", "sql_server", "sql_server://localhost:1433/db", "db"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO containers(id, source_id, container_type, external_container_id, container_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["container-1", "source-1", "database", "1", "db"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO namespaces(id, container_id, namespace_name, external_namespace_id) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ns-1", "container-1", "dbo", "1"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO data_objects(id, namespace_id, object_name, object_type, external_object_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["obj-1", "ns-1", "Orders", "table", "42"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sqlserver_object_columns(id, data_object_id, column_name, column_id) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["col-1", "obj-1", "OrderId", 1],
+        )
+        .unwrap();
+
+        clear_workspace_state(&conn).unwrap();
+
+        let tables = [
+            "workspaces",
+            "items",
+            "warehouse_schemas",
+            "warehouse_tables",
+            "selected_tables",
+            "table_config",
+            "sources",
+            "containers",
+            "namespaces",
+            "data_objects",
+            "sqlserver_object_columns",
+        ];
+        for table in tables {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 0, "expected table '{table}' to be empty after reset");
+        }
+    }
+
+    #[test]
     #[ignore = "requires reachable SQL Server (e.g. Docker)"]
     fn sql_server_inventory_populates_sqlite_on_apply_path() {
         let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST")
