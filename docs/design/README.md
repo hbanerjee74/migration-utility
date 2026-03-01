@@ -19,6 +19,7 @@ Use `docs/design/` for architecture and implementation design details.
 ### Design Index
 
 - [Database Design](database/README.md)
+- [Test Scenario Design](test-scenario/README.md)
 - [API Docs](api-docs/README.md)
 - [UI Patterns](ui-patterns/README.md) — surfaces, user flows, screen-level patterns, and interactive mockup
 - [Branding](branding/README.md)
