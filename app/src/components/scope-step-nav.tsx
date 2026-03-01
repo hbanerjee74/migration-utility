@@ -37,9 +37,9 @@ function StepIcon({ status, isActive }: { status: ScopeStepStatus | undefined; i
 export default function ScopeStepNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { scopeStepStatus, migrationStatus, setCurrentScopeStep } = useWorkflowStore();
+  const { scopeStepStatus, appPhase, setCurrentScopeStep } = useWorkflowStore();
 
-  const isLocked = migrationStatus === 'running';
+  const isLocked = appPhase === 'running_locked';
 
   function handleStepClick(step: ScopeStep) {
     if (isLocked) return;

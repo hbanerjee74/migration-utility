@@ -30,6 +30,50 @@ impl std::fmt::Debug for AppSettings {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AppPhase {
+    SetupRequired,
+    ScopeEditable,
+    PlanEditable,
+    ReadyToRun,
+    RunningLocked,
+}
+
+impl AppPhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SetupRequired => "setup_required",
+            Self::ScopeEditable => "scope_editable",
+            Self::PlanEditable => "plan_editable",
+            Self::ReadyToRun => "ready_to_run",
+            Self::RunningLocked => "running_locked",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "setup_required" => Some(Self::SetupRequired),
+            "scope_editable" => Some(Self::ScopeEditable),
+            "plan_editable" => Some(Self::PlanEditable),
+            "ready_to_run" => Some(Self::ReadyToRun),
+            "running_locked" => Some(Self::RunningLocked),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppPhaseState {
+    pub app_phase: AppPhase,
+    pub has_github_auth: bool,
+    pub has_anthropic_key: bool,
+    pub is_source_applied: bool,
+    pub scope_finalized: bool,
+    pub plan_finalized: bool,
+}
+
 // ── GitHub OAuth types ────────────────────────────────────────────────────────
 
 #[derive(Clone, Serialize, Deserialize)]

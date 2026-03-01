@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AppSettings,
+  AppPhase,
+  AppPhaseState,
   ApplyWorkspaceArgs,
   DeviceFlowResponse,
   GitHubAuthResult,
@@ -75,6 +77,21 @@ export const saveAnthropicApiKey = (apiKey: string | null) =>
 
 export const testApiKey = (apiKey: string) =>
   invoke<boolean>('test_api_key', { apiKey });
+
+export const appHydratePhase = () =>
+  invoke<AppPhaseState>('app_hydrate_phase');
+
+export const appSetPhase = (appPhase: AppPhase) =>
+  invoke<AppPhaseState>('app_set_phase', { appPhase });
+
+export const appSetPhaseFlags = (args: {
+  scopeFinalized?: boolean;
+  planFinalized?: boolean;
+}) =>
+  invoke<AppPhaseState>('app_set_phase_flags', {
+    scopeFinalized: args.scopeFinalized ?? null,
+    planFinalized: args.planFinalized ?? null,
+  });
 
 export const setLogLevel = (level: string) =>
   invoke<void>('set_log_level', { level });

@@ -54,41 +54,50 @@ describe('MonitorSurface', () => {
     resetTauriMocks();
     monitorStreamListener = null;
     mockInvokeCommands({
+      app_set_phase: {
+        appPhase: 'running_locked',
+        hasGithubAuth: true,
+        hasAnthropicKey: true,
+        isSourceApplied: true,
+        scopeFinalized: true,
+        planFinalized: true,
+      },
+      app_hydrate_phase: {
+        appPhase: 'ready_to_run',
+        hasGithubAuth: true,
+        hasAnthropicKey: true,
+        isSourceApplied: true,
+        scopeFinalized: true,
+        planFinalized: true,
+      },
       monitor_launch_agent: 'agent output',
     });
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'idle' }));
+    useWorkflowStore.setState((s) => ({ ...s, appPhase: 'ready_to_run', migrationStatus: 'idle' }));
   });
 
-  it('renders ready state when migrationStatus is idle', () => {
+  it('renders ready state when appPhase is ready_to_run', () => {
     renderPage();
     expect(screen.getByTestId('monitor-ready-state')).toBeInTheDocument();
     expect(screen.queryByTestId('monitor-running-state')).not.toBeInTheDocument();
   });
 
-  it('renders ready state when migrationStatus is complete', () => {
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'complete' }));
-    renderPage();
-    expect(screen.getByTestId('monitor-ready-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('monitor-running-state')).not.toBeInTheDocument();
-  });
-
-  it('Launch Migration button transitions migrationStatus to running', async () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId('btn-launch-migration'));
-    await waitFor(() => {
-      expect(useWorkflowStore.getState().migrationStatus).toBe('running');
-    });
-  });
-
-  it('renders running state when migrationStatus is running', () => {
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+  it('renders running state when appPhase is running_locked', () => {
+    useWorkflowStore.setState((s) => ({ ...s, appPhase: 'running_locked', migrationStatus: 'running' }));
     renderPage();
     expect(screen.getByTestId('monitor-running-state')).toBeInTheDocument();
     expect(screen.queryByTestId('monitor-ready-state')).not.toBeInTheDocument();
   });
 
+  it('Launch Migration button transitions appPhase to running_locked', async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('btn-launch-migration'));
+    await waitFor(() => {
+      expect(useWorkflowStore.getState().appPhase).toBe('running_locked');
+    });
+  });
+
   it('running state shows log stream', () => {
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+    useWorkflowStore.setState((s) => ({ ...s, appPhase: 'running_locked', migrationStatus: 'running' }));
     renderPage();
     expect(screen.getByTestId('monitor-log-stream')).toBeInTheDocument();
   });
@@ -104,6 +113,16 @@ describe('MonitorSurface', () => {
   it('does not duplicate response text when stream already emitted the final content', async () => {
     const launchResult = deferred<string>();
     mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'app_set_phase') {
+        return Promise.resolve({
+          appPhase: 'running_locked',
+          hasGithubAuth: true,
+          hasAnthropicKey: true,
+          isSourceApplied: true,
+          scopeFinalized: true,
+          planFinalized: true,
+        });
+      }
       if (cmd === 'monitor_launch_agent') {
         return launchResult.promise;
       }

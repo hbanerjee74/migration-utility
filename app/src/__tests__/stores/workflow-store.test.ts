@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useWorkflowStore } from '@/stores/workflow-store';
+import {
+  defaultRouteForPhase,
+  isSurfaceEnabledForPhase,
+  useWorkflowStore,
+} from '@/stores/workflow-store';
 
 describe('useWorkflowStore', () => {
   beforeEach(() => {
@@ -12,16 +16,26 @@ describe('useWorkflowStore', () => {
       workspaceId: null,
       selectedTableIds: [],
       migrationStatus: 'idle',
+      appPhase: 'setup_required',
+      appPhaseHydrated: false,
+      phaseFacts: {
+        hasGithubAuth: false,
+        hasAnthropicKey: false,
+        isSourceApplied: false,
+        scopeFinalized: false,
+        planFinalized: false,
+      },
     }));
   });
 
   it('has correct initial state', () => {
-    const { currentSurface, scopeStepStatus, workspaceId, migrationStatus } =
+    const { currentSurface, scopeStepStatus, workspaceId, migrationStatus, appPhase } =
       useWorkflowStore.getState();
     expect(currentSurface).toBe('home');
     expect(scopeStepStatus).toEqual({});
     expect(workspaceId).toBeNull();
     expect(migrationStatus).toBe('idle');
+    expect(appPhase).toBe('setup_required');
   });
 
   it('setCurrentSurface updates currentSurface', () => {
@@ -74,5 +88,39 @@ describe('useWorkflowStore', () => {
     expect(state.scopeStepSavedAt).toEqual({});
     expect(state.workspaceId).toBeNull();
     expect(state.migrationStatus).toBe('idle');
+    expect(state.appPhase).toBe('setup_required');
+    expect(state.appPhaseHydrated).toBe(false);
+  });
+
+  it('setAppPhaseState updates phase and syncs migrationStatus', () => {
+    useWorkflowStore.getState().setAppPhaseState({
+      appPhase: 'running_locked',
+      hasGithubAuth: true,
+      hasAnthropicKey: true,
+      isSourceApplied: true,
+      scopeFinalized: true,
+      planFinalized: true,
+    });
+    const state = useWorkflowStore.getState();
+    expect(state.appPhase).toBe('running_locked');
+    expect(state.migrationStatus).toBe('running');
+    expect(state.appPhaseHydrated).toBe(true);
+  });
+});
+
+describe('workflow phase guards', () => {
+  it('defaults to settings for setup_required phase', () => {
+    expect(defaultRouteForPhase('setup_required')).toBe('/settings');
+  });
+
+  it('disables monitor until ready_to_run', () => {
+    expect(isSurfaceEnabledForPhase('monitor', 'scope_editable')).toBe(false);
+    expect(isSurfaceEnabledForPhase('monitor', 'ready_to_run')).toBe(true);
+  });
+
+  it('enables plan only in plan/editable-or-later phases', () => {
+    expect(isSurfaceEnabledForPhase('plan', 'scope_editable')).toBe(false);
+    expect(isSurfaceEnabledForPhase('plan', 'plan_editable')).toBe(true);
+    expect(isSurfaceEnabledForPhase('plan', 'running_locked')).toBe(true);
   });
 });

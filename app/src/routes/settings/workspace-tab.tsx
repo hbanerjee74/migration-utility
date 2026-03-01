@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import SettingsPanelShell from '@/components/settings/settings-panel-shell';
 import {
+  appHydratePhase,
   workspaceDiscoverSourceDatabases,
   githubListRepos,
   workspaceApplyStart,
@@ -58,8 +59,8 @@ function getErrorMessage(err: unknown): string {
 }
 
 export default function WorkspaceTab() {
-  const { setWorkspaceId, clearWorkspaceId, migrationStatus, reset } = useWorkflowStore();
-  const isLocked = migrationStatus === 'running';
+  const { setWorkspaceId, clearWorkspaceId, appPhase, setAppPhaseState, reset } = useWorkflowStore();
+  const isLocked = appPhase === 'running_locked';
 
   const [workspaceName, setWorkspaceName] = useState(DEFAULT_WORKSPACE_NAME);
   const [repoName, setRepoName] = useState('');
@@ -329,6 +330,12 @@ export default function WorkspaceTab() {
             setWorkspaceId(ws.id);
             setWorkspaceName(ws.displayName);
           }
+          try {
+            const next = await appHydratePhase();
+            setAppPhaseState(next);
+          } catch (err) {
+            logger.error('workspace: failed to hydrate app phase after apply', err);
+          }
           setIsConfigured(true);
           setApplySuccessMessage('Workspace applied successfully. Repository cloned locally.');
           setApplyProgressMessage(null);
@@ -369,6 +376,12 @@ export default function WorkspaceTab() {
       setResetConfirmationInput('');
       setResetDialogOpen(false);
       clearWorkspaceForm();
+      try {
+        const next = await appHydratePhase();
+        setAppPhaseState(next);
+      } catch (hydrateErr) {
+        logger.error('workspace reset: failed to hydrate app phase', hydrateErr);
+      }
       logger.info('workspace: reset migration state');
     } catch (err) {
       const message = getErrorMessage(err);

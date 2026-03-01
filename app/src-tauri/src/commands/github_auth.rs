@@ -137,6 +137,7 @@ pub async fn github_poll_for_token(
             log::error!("[github_poll_for_token] failed to save settings: {e}");
             e
         })?;
+        let _ = crate::db::reconcile_and_persist_app_phase(&conn)?;
     }
 
     log::info!("[github_poll_for_token] signed in as {}", user.login);
@@ -176,6 +177,7 @@ pub fn github_logout(state: State<'_, DbState>) -> Result<(), String> {
     settings.github_user_avatar = None;
     settings.github_user_email = None;
     crate::db::write_settings(&conn, &settings)?;
+    let _ = crate::db::reconcile_and_persist_app_phase(&conn)?;
     Ok(())
 }
 

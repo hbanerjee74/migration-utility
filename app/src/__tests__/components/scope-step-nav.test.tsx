@@ -29,7 +29,7 @@ describe('ScopeStepNav', () => {
       ...s,
       currentScopeStep: 'scope',
       scopeStepStatus: {},
-      migrationStatus: 'idle',
+      appPhase: 'scope_editable',
     }));
   });
 
@@ -52,16 +52,16 @@ describe('ScopeStepNav', () => {
     expect(useWorkflowStore.getState().currentScopeStep).toBe('config');
   });
 
-  it('step buttons are disabled when migrationStatus is running', () => {
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+  it('step buttons are disabled when appPhase is running_locked', () => {
+    useWorkflowStore.setState((s) => ({ ...s, appPhase: 'running_locked' }));
     renderNav();
     expect(screen.getByTestId('scope-step-scope')).toBeDisabled();
     expect(screen.getByTestId('scope-step-candidacy')).toBeDisabled();
     expect(screen.getByTestId('scope-step-config')).toBeDisabled();
   });
 
-  it('shows amber banner when migrationStatus is running', () => {
-    useWorkflowStore.setState((s) => ({ ...s, migrationStatus: 'running' }));
+  it('shows amber banner when appPhase is running_locked', () => {
+    useWorkflowStore.setState((s) => ({ ...s, appPhase: 'running_locked' }));
     renderNav();
     expect(screen.getByText(/Migration running/i)).toBeInTheDocument();
   });
