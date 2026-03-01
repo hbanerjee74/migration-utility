@@ -1,24 +1,35 @@
 # DW Samples on Docker (macOS)
 
-This setup runs Microsoft SQL Server in Docker with persistent storage, then restores:
+This guide sets up a local SQL Server container for development and test runs in this repo.
+
+Databases restored by the helper script:
 
 - `AdventureWorksDW2022`
 - `WideWorldImportersDW`
 
-## Developer test workflow
+Container conventions used by this repo:
 
-Use this split for local development in this repo.
+- Container name: `aw-sql`
+- Exposed port: `1433`
+- SQL Server image: `mcr.microsoft.com/mssql/server:2022-latest`
 
-### One-time setup (per machine)
+## One-time setup (per machine)
 
-- Install and start Docker Desktop.
-- Pull image (if not already present):
+- Install Docker Desktop and make sure it is running.
+
+- Pull the SQL Server image:
 
 ```bash
 docker pull mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-- Create the container once (name is expected by the helper scripts):
+- Verify the image exists locally:
+
+```bash
+docker images mcr.microsoft.com/mssql/server:2022-latest
+```
+
+- Create the SQL Server container:
 
 ```bash
 docker run --name aw-sql \
@@ -30,20 +41,20 @@ docker run --name aw-sql \
   -d mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-- Set restart policy once:
+- Set restart policy:
 
 ```bash
 docker update --restart unless-stopped aw-sql
 ```
 
-- Restore sample DW databases once:
+- Restore sample data once:
 
 ```bash
 cd /Users/hbanerjee/src/migration-utility
 SA_PASSWORD='YourStrong!Passw0rd' ./scripts/restore-dw-samples.sh
 ```
 
-### Each new coding session
+## New coding session (repeat each time)
 
 - Start SQL Server:
 
@@ -51,19 +62,19 @@ SA_PASSWORD='YourStrong!Passw0rd' ./scripts/restore-dw-samples.sh
 docker start aw-sql
 ```
 
-- Verify container is ready:
+- Confirm container is healthy:
 
 ```bash
 docker logs --tail 50 aw-sql
 ```
 
-- Run the normal Rust tests you changed (example):
+- Run tests for your changed module (example):
 
 ```bash
 cargo test --manifest-path app/src-tauri/Cargo.toml source_sql
 ```
 
-- Run real SQL Server integration tests (ignored by default) against `WideWorldImportersDW`:
+- Run real SQL Server integration tests (ignored by default), targeting `WideWorldImportersDW`:
 
 ```bash
 MIGRATION_TEST_SQL_SERVER_HOST=127.0.0.1 \
@@ -74,88 +85,45 @@ MIGRATION_TEST_SQL_SERVER_DATABASE=WideWorldImportersDW \
 cargo test --manifest-path app/src-tauri/Cargo.toml source_sql -- --ignored
 ```
 
-- Stop container when done (optional):
+- Stop the container when done (optional):
 
 ```bash
 docker stop aw-sql
 ```
 
-## 1) Prerequisites
+## Optional local DB connection
 
-- Docker Desktop installed and running.
-- SQL Server image available locally:
-  - `mcr.microsoft.com/mssql/server:2022-latest`
+Use these values in VS Code or another SQL client:
 
-If the image is missing, import it from Microsoft Container Registry:
+- Server: `localhost,1433`
+- User: `sa`
+- Password: your `MSSQL_SA_PASSWORD`
+- Trust server certificate: enabled
 
-```bash
-docker pull mcr.microsoft.com/mssql/server:2022-latest
-```
+## Script behavior and overrides
 
-Confirm it exists locally:
-
-```bash
-docker images mcr.microsoft.com/mssql/server:2022-latest
-```
-
-## 2) Start SQL Server container
-
-```bash
-docker run --name aw-sql \
-  -e ACCEPT_EULA=Y \
-  -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
-  -e MSSQL_PID=Developer \
-  -p 1433:1433 \
-  -v aw-sql-data:/var/opt/mssql \
-  -d mcr.microsoft.com/mssql/server:2022-latest
-```
-
-Set restart policy once so it comes back automatically with Docker Desktop:
-
-```bash
-docker update --restart unless-stopped aw-sql
-```
-
-## 3) Restore missing DW samples (recommended)
-
-```bash
-cd /Users/hbanerjee/src/migration-utility
-SA_PASSWORD='YourStrong!Passw0rd' ./scripts/restore-dw-samples.sh
-```
-
-Script behavior:
+`scripts/restore-dw-samples.sh`:
 
 - Downloads backups to `/tmp/sql-backups` by default.
-- Restores only missing databases.
-- Cleans local downloaded backups after run by default.
-- Uses SQL Server host/port from:
+- Restores only missing sample databases.
+- Removes downloaded backups after run by default.
+- Uses:
   - `SQL_SERVER_HOST` (default `localhost`)
   - `SQL_SERVER_PORT` (default `1433`)
 
-Optional overrides:
+Optional script overrides:
 
 - `CONTAINER_NAME` (default `aw-sql`)
 - `BACKUP_DIR` (default `/tmp/sql-backups`)
-- `KEEP_BACKUPS=1` to keep local `.bak` files
-
-## 4) Daily workflow
-
-- Start container: `docker start aw-sql`
-- Stop container: `docker stop aw-sql`
-- Check health/logs: `docker logs -f aw-sql`
-- Connect from VS Code:
-  - Server: `localhost,1433`
-  - User: `sa`
-  - Password: your `MSSQL_SA_PASSWORD`
-  - Trust server certificate: enabled
+- `KEEP_BACKUPS=1` to keep `.bak` files
 
 ## Troubleshooting
 
 - `Conflict. The container name "/aw-sql" is already in use`:
-  - Container already exists; use `docker start aw-sql` instead of `docker run`.
+  - Container already exists. Use `docker start aw-sql`.
 - `Login failed for user 'sa'`:
-  - Usually a password mismatch with existing persisted data.
-  - For a clean reset:
+  - Usually password mismatch with persisted volume.
+  - Reset container and volume:
 
 ```bash
 docker rm -f aw-sql

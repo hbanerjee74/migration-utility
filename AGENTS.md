@@ -90,6 +90,7 @@ Determine what you changed, then pick the right runner:
 | What changed | Tests to run |
 |---|---|
 | Rust command or `db.rs` | `cargo test --manifest-path app/src-tauri/Cargo.toml <module>` |
+| SQL query-pack files (`app/src-tauri/sql/source/**`) or `source_sql.rs` | `cargo test --manifest-path app/src-tauri/Cargo.toml source_sql` and `cargo test --manifest-path app/src-tauri/Cargo.toml source_sql -- --ignored` (requires local SQL Server per `docs/reference/setup-docker/README.md`) |
 | Frontend store / hook | `npm run test:unit` |
 | Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
 | Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
@@ -98,6 +99,8 @@ Determine what you changed, then pick the right runner:
 | Unsure | all of the above |
 
 Run `npx tsc --noEmit` from `app/` first — catches type errors in files you didn't directly touch.
+
+When a change depends on local infrastructure (for example SQL Server-backed ignored tests), document in the PR which commands were run and which were not run.
 
 ## Design Docs
 
