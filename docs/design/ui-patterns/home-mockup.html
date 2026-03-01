@@ -351,7 +351,7 @@
     ═══════════════════════════════════════════════ */
     .scope-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       margin-bottom: 12px;
       gap: 10px;
@@ -361,6 +361,12 @@
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    .scope-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
     }
     .scope-tabbar {
       display: flex;
@@ -544,13 +550,12 @@
         <button class="sw-btn"     onclick="show('home', this); homeState('active')">Home — Active</button>
         <button class="sw-btn"     onclick="show('scope-select', this, 'scope')">Scope — Select Tables</button>
         <button class="sw-btn"     onclick="show('scope-details', this, 'scope')">Scope — Table Details</button>
-        <button class="sw-btn"     onclick="show('scope-plan', this, 'scope')">Scope — Plan</button>
-        <button class="sw-btn"     onclick="show('scope-final', this, 'scope')">Scope — Final Scope</button>
+        <button class="sw-btn"     onclick="show('plan', this, 'plan')">Plan — Draft</button>
         <button class="sw-btn" id="sw-monitor-ready"   onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
         <button class="sw-btn" id="sw-monitor-running" onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
         <button class="sw-btn"     onclick="show('settings-connections', this, 'settings')">Settings — Connections</button>
         <button class="sw-btn"     onclick="show('settings-workspace', this, 'settings')">Settings — Workspace</button>
-        <button class="sw-btn"     onclick="show('settings-reset', this, 'settings')">Settings — Reset</button>
+        <button class="sw-btn"     onclick="show('settings-profile', this, 'settings')">Settings — Profile</button>
         <button class="sw-btn"     onclick="show('settings-usage', this, 'settings')">Settings — Usage</button>
         <button class="sw-btn theme on" id="theme-light" onclick="setTheme('light')">Theme: Light</button>
         <button class="sw-btn theme" id="theme-dark" onclick="setTheme('dark')">Theme: Dark</button>
@@ -576,6 +581,11 @@
       <!-- Scope -->
       <div class="nav-item" id="nav-scope" data-tip="Scope" onclick="show('scope-select', null, 'scope')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+      </div>
+
+      <!-- Plan -->
+      <div class="nav-item" id="nav-plan" data-tip="Plan" onclick="show('plan', null, 'plan')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg>
       </div>
 
       <!-- Monitor -->
@@ -782,16 +792,18 @@
             <div class="scope-header">
               <div class="scope-summary">
                 <span class="chip chip-blue" id="scope-select-count-chip">14 tables selected</span>
-                <span class="text-xs text-muted" id="scope-select-meta-text">Saved 2m ago</span>
+                <span class="text-xs text-muted" data-scope-meta-text>Saved 2m ago</span>
+                <span class="text-xs text-muted" data-scope-lock-meta>Scope editable</span>
               </div>
-              <button class="btn btn-outline btn-sm" onclick="refreshScopeSchema()">Refresh schema</button>
+              <div class="scope-actions">
+                <button class="btn btn-outline btn-sm" onclick="refreshScopeSchema()" data-scope-lockable>Refresh schema</button>
+                <button class="btn btn-primary btn-sm" onclick="finalizeScope()" data-scope-finalize-btn data-scope-lockable>Finalize Scope</button>
+              </div>
             </div>
 
             <div class="scope-tabbar">
               <div class="scope-tab active">1. Select Tables</div>
               <div class="scope-tab">2. Table Details</div>
-              <div class="scope-tab">3. Plan</div>
-              <div class="scope-tab">4. Final Scope</div>
             </div>
 
             <div class="card" style="overflow-y:auto; flex:1;">
@@ -803,6 +815,7 @@
                     style="width:180px;"
                     placeholder="Search schema..."
                     oninput="filterScopeSelectRows()"
+                    data-scope-lockable
                   />
                   <input
                     id="scope-select-table-search"
@@ -810,12 +823,13 @@
                     style="width:220px;"
                     placeholder="Search tables..."
                     oninput="filterScopeSelectRows()"
+                    data-scope-lockable
                   />
                 </div>
                 <div class="row gap8">
-                  <button class="btn btn-primary btn-sm" onclick="addVisibleToScopeSelection()">Add to selection</button>
-                  <button class="btn btn-outline btn-sm" onclick="clearScopeFilters()">Clear filters</button>
-                  <button class="btn btn-ghost btn-sm" style="color:var(--destructive);" onclick="resetScopeSelection()">Reset selection</button>
+                  <button class="btn btn-primary btn-sm" onclick="addVisibleToScopeSelection()" data-scope-lockable>Add to selection</button>
+                  <button class="btn btn-outline btn-sm" onclick="clearScopeFilters()" data-scope-lockable>Clear filters</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--destructive);" onclick="resetScopeSelection()" data-scope-lockable>Reset selection</button>
                 </div>
               </div>
               <div class="scope-select-head">
@@ -837,63 +851,63 @@
               </div>
               <div id="scope-select-table-body">
                 <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="fact_sales">
-                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">dbo</span>
                   <span class="font-mono">fact_sales</span>
                   <span class="font-mono text-muted">12.4M</span>
                   <span class="font-mono text-muted">+182K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="agg_sales_daily">
-                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">dbo</span>
                   <span class="font-mono">agg_sales_daily</span>
                   <span class="font-mono text-muted">2.8M</span>
                   <span class="font-mono text-muted">+35K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="dim_customer">
-                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">dbo</span>
                   <span class="font-mono">dim_customer</span>
                   <span class="font-mono text-muted">1.1M</span>
                   <span class="font-mono text-muted">+2.1K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="dim_product">
-                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">dbo</span>
                   <span class="font-mono">dim_product</span>
                   <span class="font-mono text-muted">85K</span>
                   <span class="font-mono text-muted">+90</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="gold_summary">
-                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">reporting</span>
                   <span class="font-mono">gold_summary</span>
                   <span class="font-mono text-muted">420K</span>
                   <span class="font-mono text-muted">+6.2K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="avg_order_value">
-                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">reporting</span>
                   <span class="font-mono">avg_order_value</span>
                   <span class="font-mono text-muted">140K</span>
                   <span class="font-mono text-muted">+1.4K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="gold_sales_rollup">
-                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">reporting</span>
                   <span class="font-mono">gold_sales_rollup</span>
                   <span class="font-mono text-muted">810K</span>
                   <span class="font-mono text-muted">+9.8K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="staging" data-table="stg_orders">
-                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">staging</span>
                   <span class="font-mono">stg_orders</span>
                   <span class="font-mono text-muted">5.3M</span>
                   <span class="font-mono text-muted">+61K</span>
                 </div>
                 <div class="scope-select-row scope-select-filterable-row" data-schema="staging" data-table="all_orders_delta">
-                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <input type="checkbox" onchange="updateScopeSelectCount()" data-scope-lockable />
                   <span class="font-mono text-muted">staging</span>
                   <span class="font-mono">all_orders_delta</span>
                   <span class="font-mono text-muted">3.7M</span>
@@ -914,15 +928,18 @@
               <div class="scope-summary">
                 <span class="chip chip-blue">9 / 14 tables ready</span>
                 <span class="text-xs text-muted">Needs details for 5 tables</span>
+                <span class="text-xs text-muted" data-scope-meta-text>Saved 2m ago</span>
+                <span class="text-xs text-muted" data-scope-lock-meta>Scope editable</span>
               </div>
-              <span class="text-xs text-muted">Table-by-table configuration</span>
+              <div class="scope-actions">
+                <button class="btn btn-outline btn-sm" onclick="refreshScopeSchema()" data-scope-lockable>Refresh schema</button>
+                <button class="btn btn-primary btn-sm" onclick="finalizeScope()" data-scope-finalize-btn data-scope-lockable>Finalize Scope</button>
+              </div>
             </div>
 
             <div class="scope-tabbar">
               <div class="scope-tab">1. Select Tables</div>
               <div class="scope-tab active">2. Table Details</div>
-              <div class="scope-tab">3. Plan</div>
-              <div class="scope-tab">4. Final Scope</div>
             </div>
 
             <div class="scope-grid" style="flex:1;">
@@ -936,14 +953,14 @@
                     <span class="text-xs">2 selected</span>
                   </summary>
                   <div class="scope-table-row" style="background:var(--pacific-10); border-top:none;">
-                    <input type="radio" checked />
+                    <input type="radio" checked data-scope-lockable />
                     <span class="font-mono">fact_sales</span>
                     <span class="font-mono text-muted">dbo</span>
                     <span class="font-mono text-muted">12.4M</span>
                     <span class="chip chip-green">Ready</span>
                   </div>
                   <div class="scope-table-row">
-                    <input type="radio" />
+                    <input type="radio" data-scope-lockable />
                     <span class="font-mono">dim_customer</span>
                     <span class="font-mono text-muted">dbo</span>
                     <span class="font-mono text-muted">1.1M</span>
@@ -956,7 +973,7 @@
                     <span class="text-xs">1 selected</span>
                   </summary>
                   <div class="scope-table-row">
-                    <input type="radio" />
+                    <input type="radio" data-scope-lockable />
                     <span class="font-mono">gold_summary</span>
                     <span class="font-mono text-muted">reporting</span>
                     <span class="font-mono text-muted">420K</span>
@@ -971,7 +988,7 @@
                     <p class="text-sm font-semibold font-mono">dbo.fact_sales</p>
                     <p class="text-xs text-muted mt4">Migration metadata required for build + tests</p>
                   </div>
-                  <button class="btn btn-outline btn-sm">Refresh plan</button>
+                  <button class="btn btn-outline btn-sm" data-scope-lockable>Refresh plan</button>
                 </div>
 
                 <div class="kv-grid">
@@ -1003,23 +1020,16 @@
         </div><!-- /surface-scope-details -->
 
         <!-- ════════════════════════════════════
-             SCOPE SURFACE — PLAN
+             PLAN SURFACE
         ════════════════════════════════════ -->
-        <div id="surface-scope-plan" class="surface">
-          <div class="section-label">Scope — Plan</div>
+        <div id="surface-plan" class="surface">
+          <div class="section-label">Plan — Table migration plan review</div>
           <div class="scope-shell">
             <div class="scope-header">
               <div class="scope-summary">
                 <span class="chip chip-blue">9 / 14 table plans ready</span>
                 <span class="text-xs text-muted">Plan status: Draft · Missing · Stale · Approved</span>
               </div>
-            </div>
-
-            <div class="scope-tabbar">
-              <div class="scope-tab">1. Select Tables</div>
-              <div class="scope-tab">2. Table Details</div>
-              <div class="scope-tab active">3. Plan</div>
-              <div class="scope-tab">4. Final Scope</div>
             </div>
 
             <div class="card card-p" style="overflow-y:auto; flex:1;">
@@ -1055,7 +1065,7 @@
   - freshness_sale_date</pre>
             </div>
           </div>
-        </div><!-- /surface-scope-plan -->
+        </div><!-- /surface-plan -->
 
         <!-- ════════════════════════════════════
              SCOPE SURFACE — TAB 3
@@ -1221,7 +1231,7 @@
           <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
             <div class="stab active">Connections</div>
             <div class="stab">Workspace</div>
-            <div class="stab">Reset</div>
+            <div class="stab">Profile</div>
             <div class="stab">Usage</div>
           </div>
           <div class="stab-panel" style="max-width:520px;">
@@ -1269,34 +1279,71 @@
           <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
             <div class="stab">Connections</div>
             <div class="stab active">Workspace</div>
-            <div class="stab">Reset</div>
+            <div class="stab">Profile</div>
             <div class="stab">Usage</div>
           </div>
           <div class="stab-panel" style="max-width:520px;">
 
-            <div class="settings-group-label row gap6">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Locked during active migration · Reset to change
+            <div class="settings-group-label row gap6" style="align-items:center;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Workspace configured and locked
             </div>
 
-            <!-- Fabric workspace -->
+            <p class="text-sm" style="color:#92400E; background:#FEF3C7; border:1px solid #FCD34D; border-radius:6px; padding:8px 10px; margin:0 0 10px 0;">
+              Workspace is locked after apply. Reset Migration to edit settings.
+            </p>
+
+            <!-- Source connection -->
             <div class="card card-p mb8">
-              <p class="text-sm font-semibold mb8">Fabric workspace</p>
-              <p class="text-sm text-muted" style="margin-bottom:12px;">The source Fabric workspace containing the stored procedures to migrate.</p>
+              <p class="text-sm font-semibold mb8">Source connection</p>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Configure source credentials, test connectivity, then pick a discovered database.</p>
               <div style="display:flex; flex-direction:column; gap:10px;">
                 <div>
-                  <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Workspace URL</label>
-                  <input type="text" value="https://app.fabric.microsoft.com/groups/a1b2c3d4-..." disabled style="width:100%; font-family:var(--font-mono); font-size: 14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                  <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Data source type</label>
+                  <select disabled style="width:100%; font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;">
+                    <option>SQL Server</option>
+                  </select>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                   <div>
-                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Service principal ID</label>
-                    <input type="text" value="sp-vibedata-migration" disabled style="width:100%; font-size: 14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Server</label>
+                    <input type="text" value="sql.acme.local" disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
                   </div>
                   <div>
-                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Secret</label>
-                    <input type="password" value="••••••••••••••••" disabled style="width:100%; font-size: 14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Port</label>
+                    <input type="text" value="1433" disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
                   </div>
+                </div>
+                <div>
+                  <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Authentication</label>
+                  <select disabled style="width:100%; font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;">
+                    <option>SQL Login</option>
+                  </select>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <div>
+                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">SQL login</label>
+                    <input type="text" value="sa" disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                  </div>
+                  <div>
+                    <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Password</label>
+                    <input type="password" value="••••••••••" disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--fg-muted);">
+                  <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" checked disabled /> Encrypt connection</label>
+                  <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" disabled /> Trust server certificate</label>
+                </div>
+                <div style="border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); padding:10px;">
+                  <div class="row between" style="margin-bottom:6px;">
+                    <span class="text-sm text-muted">Step 1: test server/auth credentials</span>
+                    <button class="btn btn-outline btn-sm" disabled>Test connection</button>
+                  </div>
+                  <p class="text-sm text-muted" style="margin-bottom:8px;">Step 2: select database from discovered list</p>
+                  <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Database</label>
+                  <select disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;">
+                    <option>AdventureWorks</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -1304,99 +1351,92 @@
             <!-- Migration repo -->
             <div class="card card-p mb8">
               <p class="text-sm font-semibold mb8">Migration repo</p>
-              <p class="text-sm text-muted" style="margin-bottom:12px;">The GitHub repo where migration state and agent outputs are committed.</p>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bg-muted); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
-                  <span class="font-mono text-sm" style="color:var(--fg-muted);">acmecorp/finance-migration</span>
-                </div>
-                <div style="display:inline-flex; align-items:center; gap:4px; font-size: 12px; color:var(--fg-subtle); cursor:not-allowed;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  Locked
-                </div>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Select from repositories you can access.</p>
+              <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Repo name *</label>
+              <input type="text" value="acme/data-platform" disabled style="width:100%; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+              <div style="margin-top:6px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); overflow:hidden; opacity:.7;">
+                <div style="padding:7px 10px; font-size:12px; font-family:var(--font-mono); border-bottom:1px solid var(--border);">acme/data-platform</div>
+                <div style="padding:7px 10px; font-size:12px; font-family:var(--font-mono);">acme/data-platform-migration</div>
               </div>
             </div>
 
-            <!-- Local paths -->
-            <div class="card card-p">
+            <!-- Working directory -->
+            <div class="card card-p mb8">
               <p class="text-sm font-semibold mb8">Working directory</p>
-              <p class="text-sm text-muted" style="margin-bottom:12px;">Where the migration repo is cloned on your machine.</p>
-              <div style="display:flex; flex-direction:column; gap:10px;">
-                <div>
-                  <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Directory <span style="color:var(--fg-subtle);">(locked during migration)</span></label>
-                  <div style="display:flex; gap:8px;">
-                    <input type="text" value="~/migration-utility" disabled style="flex:1; font-family:var(--font-mono); font-size: 14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
-                    <div style="display:inline-flex; align-items:center; gap:4px; font-size: 12px; color:var(--fg-subtle); cursor:not-allowed;">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                      Locked
-                    </div>
-                  </div>
-                  <p class="text-sm text-subtle mt4">Default: ~/migration-utility. Changeable when no migration is active.</p>
-                </div>
-                <hr style="border-color:var(--border);" />
-                <div>
-                  <p class="text-sm text-muted mb4">App data directory</p>
-                  <div style="display:flex; align-items:center; gap:8px; background:var(--bg-muted); border-radius:var(--radius-sm); padding:8px 10px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--fg-subtle)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    <span class="font-mono text-sm" style="color:var(--fg-muted);">~/.vibedata/migration-utility</span>
-                  </div>
-                  <p class="text-sm text-subtle mt4">Hardcoded. Stores .claude context, agent logs, and run history.</p>
-                </div>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Choose where the selected repository should be cloned locally.</p>
+              <label class="text-sm text-muted" style="display:block; margin-bottom:4px;">Directory</label>
+              <div class="row gap8">
+                <input type="text" value="/Users/name/migration-work" disabled style="flex:1; font-family:var(--font-mono); font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;" />
+                <button class="btn btn-outline btn-sm" disabled>Browse</button>
               </div>
+            </div>
+
+            <p class="text-sm" style="color:var(--seafoam); margin:0 0 8px 0;">Workspace applied successfully. Repository cloned locally.</p>
+
+            <div class="row gap8" style="justify-content:flex-end; margin:0 0 8px 0;">
+              <button class="btn btn-primary btn-sm" disabled>Apply</button>
+            </div>
+
+            <!-- Danger zone -->
+            <div class="card card-p" style="border-color: color-mix(in oklch, var(--destructive), transparent 70%);">
+              <p class="text-sm font-semibold mb8" style="color:var(--destructive);">Danger Zone</p>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Reset local migration state and workspace settings. Remote GitHub repository is not touched.</p>
+              <button class="btn btn-sm" style="background:var(--destructive); color:#fff;">Reset Migration</button>
             </div>
 
           </div>
         </div>
 
         <!-- ════════════════════════════════════
-             SETTINGS SURFACE — RESET
+             SETTINGS SURFACE — PROFILE
         ════════════════════════════════════ -->
-        <div id="surface-settings-reset" class="surface">
+        <div id="surface-settings-profile" class="surface">
           <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px;">
             <div class="stab">Connections</div>
             <div class="stab">Workspace</div>
-            <div class="stab active">Reset</div>
+            <div class="stab active">Profile</div>
             <div class="stab">Usage</div>
           </div>
           <div class="stab-panel" style="max-width:520px;">
 
-            <div class="card card-p" style="border-color: color-mix(in oklch, var(--destructive), transparent 70%);">
-              <div class="row gap10 mb8">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                <p class="text-base font-semibold" style="color:var(--destructive);">Reset migration</p>
+            <div class="card card-p mb8">
+              <p class="text-sm font-semibold mb8">Appearance</p>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Choose your preferred colour scheme.</p>
+              <div class="row gap8">
+                <button class="btn btn-outline" disabled>System</button>
+                <button class="btn btn-outline" disabled>Light</button>
+                <button class="btn btn-outline" disabled>Dark</button>
               </div>
-              <p class="text-sm text-muted" style="line-height:1.7; margin-bottom:16px;">
-                This will permanently clear the current migration and cannot be undone.
-              </p>
-              <div style="background:var(--bg-muted); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:16px;">
-                <p class="text-sm font-semibold mb8">What gets removed:</p>
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <div class="row gap8 text-sm text-muted">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    Migration repo branch <span class="font-mono" style="color:var(--fg);">acmecorp/finance-migration</span> abandoned
-                  </div>
-                  <div class="row gap8 text-sm text-muted">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    Local working directory <span class="font-mono" style="color:var(--fg);">~/migration-utility</span> deleted
-                  </div>
-                  <div class="row gap8 text-sm text-muted">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    All scope, candidacy, and table config selections cleared
-                  </div>
-                  <div class="row gap8 text-sm text-muted">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--destructive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    Workspace configuration cleared — you'll set it again on the next migration
-                  </div>
+            </div>
+
+            <div class="card card-p mb8">
+              <p class="text-sm font-semibold mb8">Logging</p>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Set verbosity for app and backend logs.</p>
+              <div class="row gap8" style="align-items:center;">
+                <select disabled style="width:130px; font-size:14px; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-muted); color:var(--fg-muted); outline:none; cursor:not-allowed;">
+                  <option>Info</option>
+                </select>
+                <span class="text-sm text-muted">Key events (default)</span>
+              </div>
+            </div>
+
+            <div class="card card-p">
+              <p class="text-sm font-semibold mb8">Directories</p>
+              <p class="text-sm text-muted" style="margin-bottom:12px;">Local paths used by the Migration Utility app.</p>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div class="row gap8">
+                  <span class="text-sm text-muted" style="width:140px;">Working Directory</span>
+                  <code class="text-sm font-mono" style="color:var(--fg-muted); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">~/.vibedata/migration-utility</code>
+                </div>
+                <div class="row gap8">
+                  <span class="text-sm text-muted" style="width:140px;">Log File</span>
+                  <code class="text-sm font-mono" style="color:var(--fg-muted); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">/Users/name/Library/Logs/migration-utility/app.log</code>
+                </div>
+                <div class="row gap8">
+                  <span class="text-sm text-muted" style="width:140px;">Data Directory</span>
+                  <code class="text-sm font-mono" style="color:var(--fg-muted); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">/Users/name/Library/Application Support/migration-utility</code>
                 </div>
               </div>
-              <div class="row gap8 mb8" style="background:var(--bg-muted); border-radius:var(--radius-sm); padding:10px 12px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--seafoam)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span class="text-sm text-muted">Kept: GitHub connection · Anthropic API key · Log path</span>
-              </div>
-              <button class="btn btn-sm" style="background:var(--destructive); color:#fff; width:100%; justify-content:center;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                Reset migration and start fresh
-              </button>
             </div>
 
           </div>
@@ -1798,8 +1838,9 @@
     }
 
     function refreshScopeSchema() {
-      var meta = document.getElementById('scope-select-meta-text');
-      if (meta) meta.textContent = 'Schema refreshed just now';
+      document.querySelectorAll('[data-scope-meta-text]').forEach(function (el) {
+        el.textContent = 'Schema refreshed just now';
+      });
     }
 
     function sortScopeSelectRows(key) {
@@ -1833,14 +1874,37 @@
     }
 
     function show(name, btn, navName) {
-      document.querySelectorAll('.surface').forEach(s => s.classList.remove('active'));
-      document.getElementById('surface-' + name).classList.add('active');
+      var next = document.getElementById('surface-' + name);
+      if (!next) return;
+      document.querySelectorAll('.surface').forEach(function (s) { s.classList.remove('active'); });
+      next.classList.add('active');
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       document.getElementById('nav-' + (navName || name)).classList.add('active');
       if (btn) {
         document.querySelectorAll('.sw-btn').forEach(b => b.classList.remove('on'));
         btn.classList.add('on');
       }
+    }
+
+    function setScopeLocked(locked) {
+      document.querySelectorAll('[data-scope-lockable]').forEach(function (el) {
+        if ('disabled' in el) el.disabled = locked;
+      });
+
+      document.querySelectorAll('[data-scope-lock-meta]').forEach(function (el) {
+        el.textContent = locked ? 'Scope finalized (read-only)' : 'Scope editable';
+      });
+
+      document.querySelectorAll('[data-scope-finalize-btn]').forEach(function (el) {
+        el.textContent = locked ? 'Scope Finalized' : 'Finalize Scope';
+      });
+    }
+
+    function finalizeScope() {
+      document.querySelectorAll('[data-scope-meta-text]').forEach(function (el) {
+        el.textContent = 'Scope finalized just now';
+      });
+      setScopeLocked(true);
     }
 
     function homeState(state) {
@@ -1870,6 +1934,7 @@
 
     updateScopeSelectCount();
     filterScopeSelectRows();
+    setScopeLocked(false);
 
   </script>
 
