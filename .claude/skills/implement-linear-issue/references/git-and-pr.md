@@ -39,7 +39,7 @@ The test plan section is **checked during `/close-issue`** — unchecked items b
 - Write manual test items as concrete steps the user can follow (action → expected result).
 - Cover every user-visible behavior change — not internals.
 
-After creating the PR, link it to the Linear issue via `linear-server:update_issue`.
+After creating the PR, update the Linear issue via `mcp__linear__save_issue` and/or `mcp__linear__create_comment` with the PR URL.
 
 ## Worktree Preservation
 

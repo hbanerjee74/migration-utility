@@ -1,5 +1,7 @@
 # Coding Conventions
 
+This is the canonical source for naming, markdown, and error-handling conventions.
+
 ## Python (Orchestrator + Agents)
 
 - Files: `snake_case` (`candidacy_agent.py`, `plan_parser.py`)
@@ -25,25 +27,7 @@
 
 ## Logging
 
-### Python
-
-Use the `logging` module. One logger per module: `logger = logging.getLogger(__name__)`.
-
-| Level | When to use | Examples |
-|---|---|---|
-| `error` | Operation failed, user impact likely | Fabric API 5xx, dbt-core-mcp tool failure, plan.md write failed |
-| `warning` | Unexpected but recoverable | Missing ADF activity type (skipping), retrying after transient failure |
-| `info` | Key lifecycle events | Agent started, model tier classified, plan state changed, PR pushed |
-| `debug` | Intermediate state, tool calls, SQL fragments | Stored proc SQL extracted, lineage graph edge added |
-
-- Log on entry (with key params) and on failure. Use `debug` for intermediate steps.
-- Never log secrets (API keys, tokens) or PII column values.
-- Include context: `logger.info("candidacy: classifying %d artifacts in domain %s", count, domain)` not just `logger.info("classifying")`.
-
-### Rust / Frontend
-
-- Every `#[tauri::command]` logs `info!` on entry and `error!` on failure.
-- Frontend: `console.log` for significant user actions (scope confirmed, migration triggered), `console.error` for caught errors. No render cycle or state read logging.
+Canonical logging policy is in `.claude/rules/logging-policy.md`.
 
 ## Markdown
 

@@ -5,194 +5,79 @@ description: Tauri framework for building cross-platform desktop and mobile apps
 
 # Tauri Skill
 
-Comprehensive assistance with Tauri development, generated from official documentation.
+Use this skill for Tauri architecture, command wiring, sidecar integration, packaging, and debugging.
 
-## When to Use This Skill
+## Repo Alignment
 
-This skill should be triggered when:
-- Building cross-platform desktop applications with Rust + WebView
-- Implementing native system integrations (file system, notifications, system tray)
-- Setting up Tauri project structure and configuration
-- Debugging Tauri applications in VS Code or Neovim
-- Configuring Windows/macOS/Linux code signing for distribution
-- Developing mobile apps with Tauri (Android/iOS)
-- Creating Tauri plugins for custom native functionality
-- Implementing IPC (Inter-Process Communication) between frontend and backend
-- Optimizing Tauri app security and permissions
-- Setting up CI/CD pipelines for Tauri app releases
+For this repository, prioritize:
 
-## Key Concepts
+- `app/src-tauri/` for Rust commands and state
+- `app/src/` for frontend invoke/listen usage
+- `app/sidecar/` for agent runtime integration
 
-### Multi-Process Architecture
-Tauri uses a **Core Process** (Rust) and **WebView Process** (HTML/CSS/JS) architecture:
-- **Core Process**: Manages windows, system tray, IPC routing, and has full OS access
-- **WebView Process**: Renders UI using system WebViews (no bundled browser!)
-- **Principle of Least Privilege**: Each process has minimal required permissions
+Follow repo rules in:
 
-### Inter-Process Communication (IPC)
-Two IPC primitives:
-- **Events**: Fire-and-forget, one-way messages (both Core -> WebView and WebView -> Core)
-- **Commands**: Request-response pattern using `invoke()` API (WebView -> Core only)
+- `../../rules/rust-backend.md`
+- `../../rules/agent-sidecar.md`
+- `../../rules/logging-policy.md`
 
-### Why Tauri?
-- **Small binaries**: Uses OS WebViews (Microsoft Edge WebView2/WKWebView/webkitgtk)
-- **Security-first**: Message passing architecture prevents direct function access
-- **Multi-platform**: Desktop (Windows/macOS/Linux) + Mobile (Android/iOS)
+## Standard Workflow
 
-## Quick Reference
+1. Identify affected boundary: frontend, Rust command, sidecar, or packaging.
+2. Make minimal changes in the correct layer.
+3. Add/update tests for changed behavior.
+4. Run validation commands:
 
-### 1. Project Setup - Cargo.toml
-
-```toml
-[build-dependencies]
-tauri-build = "2.0.0"
-
-[dependencies]
-tauri = { version = "2.0.0" }
+```bash
+cd app && npx tsc --noEmit
+cargo test --manifest-path app/src-tauri/Cargo.toml
 ```
 
-### 2. Creating a Tauri Command
+- For sidecar changes:
+
+```bash
+cd app/sidecar && npx vitest run
+npm run sidecar:build
+```
+
+## Command Pattern
+
+Use typed command boundaries and explicit error mapping:
+
 ```rust
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}!", name)
-}
-
-// In main.rs
-fn main() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+pub fn example_command(state: tauri::State<DbState>) -> Result<(), CommandError> {
+    log::info!("example_command: start");
+    // command logic
+    Ok(())
 }
 ```
 
-### 3. Calling Commands from Frontend
-```javascript
-import { invoke } from '@tauri-apps/api/core';
+Frontend invoke pattern:
 
-const greeting = await invoke('greet', { name: 'World' });
-console.log(greeting); // "Hello, World!"
+```ts
+import { invoke } from "@tauri-apps/api/core";
+
+await invoke("example_command", { /* args */ });
 ```
 
-### 4. Emitting Events
-```rust
-// From Rust
-app.emit_all("event-name", Payload { message: "Hello".into() }).unwrap();
+## Debugging Checklist
 
-// Listening in JavaScript
-import { listen } from '@tauri-apps/api/event';
+- Confirm command is registered in `src/lib.rs`.
+- Confirm frontend uses the exact command name.
+- Confirm payload is JSON-serializable.
+- Confirm sidecar writes protocol messages only to stdout.
+- Confirm logs do not include secrets.
 
-const unlisten = await listen('event-name', (event) => {
-    console.log(event.payload.message);
-});
-```
+## References
 
-### 5. Rust State Management
-```rust
-let data = app.state::<AppData>();
-```
+Use the local reference files for focused guidance:
 
-### 6. VS Code Debugging - launch.json
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Tauri Development Debug",
-      "cargo": {
-        "args": [
-          "build",
-          "--manifest-path=./src-tauri/Cargo.toml",
-          "--no-default-features"
-        ]
-      },
-      "preLaunchTask": "ui:dev"
-    }
-  ]
-}
-```
+- `references/getting-started.md`
+- `references/core-concepts.md`
+- `references/plugins.md`
+- `references/security.md`
+- `references/distribution.md`
+- `references/reference.md`
 
-### 7. Windows Code Signing Configuration
-```json
-{
-  "tauri": {
-    "bundle": {
-      "windows": {
-        "certificateThumbprint": "A1B1A2B2A3B3A4B4A5B5A6B6A7B7A8B8A9B9A0B0",
-        "digestAlgorithm": "sha256",
-        "timestampUrl": "http://timestamp.comodoca.com"
-      }
-    }
-  }
-}
-```
-
-### 8. Opening DevTools Programmatically
-```rust
-use tauri::Manager;
-
-#[tauri::command]
-fn open_devtools(window: tauri::Window) {
-    window.open_devtools();
-}
-```
-
-### 9. GitHub Actions - Publish Workflow
-```yaml
-name: 'publish'
-on:
-  push:
-    tags:
-      - 'app-v*'
-```
-
-## Reference Files
-
-This skill includes comprehensive documentation organized into categories:
-
-- **core-concepts.md** - Process model, IPC, debugging, architecture
-- **getting-started.md** - Project setup and first app tutorials
-- **plugins.md** - Plugin development and integration
-- **reference.md** - API references and configuration schemas
-- **security.md** - CSP, secure IPC, permissions, WebView security
-- **distribution.md** - Code signing, CI/CD, platform packaging
-
-## Debugging Quick Tips
-
-### Enable Rust Backtraces
-```bash
-RUST_BACKTRACE=1 tauri dev
-```
-
-### Create Debug Build
-```bash
-npm run tauri build -- --debug
-```
-
-### Open DevTools
-```rust
-use tauri::Manager;
-window.open_devtools();
-window.close_devtools();
-```
-
-## Platform-Specific Notes
-
-### Windows
-- Uses **Microsoft Edge WebView2** (automatically installed on Windows 11)
-- Code signing required for SmartScreen reputation
-
-### macOS
-- Uses **WKWebView** (native to macOS)
-- Code signing with Apple Developer certificate
-
-### Linux
-- Uses **webkitgtk** (must be installed separately)
-- Package formats: .deb, .rpm, .AppImage
-
-## Resources
-
-- Official docs: https://tauri.app/
+Use official docs for deep API details: <https://tauri.app/>.

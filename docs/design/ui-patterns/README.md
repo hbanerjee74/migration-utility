@@ -142,6 +142,14 @@ After reset, Home returns to the Ready state. FDE reconfigures Workspace and sta
 | Review/Reject manual track runs in parallel | Candidacy shows all tiers; BLOCKED in Monitor resolves when FDE marks upstream RESOLVED |
 | PII masking before fixtures | Table Config PII column confirmation required before launch |
 
+## Interaction Rules
+
+- Scope lock after launch: Scope remains navigable, but all three steps (Scope, Candidacy, Table Config) are read-only behind an amber lock banner until run completion or cancellation.
+- Settings lock behavior: Connections remains editable at all times. Workspace fields are disabled while a run is active.
+- Scope forward navigation: Block only when required state is missing (for example zero tables selected). Use inline validation; do not use blocking modals for this gate.
+- Candidacy override: Override reason is required. Save stays disabled until reason is non-empty. Persist overrides only on explicit save action (no debounced writes).
+- Table confirmation gate: "Confirm table" is an explicit user action that writes `confirmed_at`. Agent pre-population does not imply confirmation. Launch is blocked until all included tables are confirmed.
+
 ---
 
 ## Screen Patterns

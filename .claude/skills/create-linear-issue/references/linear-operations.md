@@ -1,10 +1,17 @@
 # Linear Operations
 
-All Linear operations are performed by sub-agents to keep API payloads out of the coordinator's context. Always use the `linear-server:` prefix for MCP tool names.
+Execute Linear operations directly by default using MCP tools. Use sub-agents only when parallel research is required.
 
 ## Required MCP Tools
 
-`linear-server:list_projects`, `linear-server:list_issue_labels`, `linear-server:create_issue_label`, `linear-server:create_issue`, `linear-server:get_user`
+- `mcp__linear__list_issues`
+- `mcp__linear__get_issue`
+- `mcp__linear__list_projects`
+- `mcp__linear__list_issue_labels`
+- `mcp__linear__save_issue`
+- `mcp__linear__create_comment`
+
+If any required tool fails after one retry, stop and report the exact failing step.
 
 ## Estimate Mapping
 

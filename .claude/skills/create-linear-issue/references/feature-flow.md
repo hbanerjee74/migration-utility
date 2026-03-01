@@ -8,7 +8,7 @@ In both cases, the codebase is reviewed internally for feasibility. The differen
 
 ## Step 2a: Direct Path
 
-Spawn a single `feature-dev:code-explorer` sub-agent to review the codebase and assess feasibility. It returns:
+Review the codebase directly to assess feasibility and scope.
 
 **INTERNAL (coordinator only):** feasibility, scope signal (XS/S/M/L), constraints.
 
@@ -16,21 +16,21 @@ Spawn a single `feature-dev:code-explorer` sub-agent to review the codebase and 
 
 ## Step 2b: Exploration Path
 
-Spawn an **exploration team lead** that coordinates parallel sub-agents:
+When complexity is high, run parallel research (directly or with sub-agents):
 
-1. **Codebase analyst** (`feature-dev:code-explorer`) — feasibility, constraints, scope (internal only)
+1. **Codebase analyst** — feasibility, constraints, scope (internal only)
 2. **External researcher** — how similar products handle this, UX patterns, backend patterns
 
-The team lead synthesizes into 2-3 product-level options. Always include the user's original approach. No implementation details.
+Synthesize into 2-3 product-level options. Always include the user's original approach. No implementation details.
 
 ## Step 3: User Picks
 
-Present options via `AskUserQuestion`.
+Present options clearly and let the user pick one.
 
 ## Step 4: Requirements Definition
 
-Spawn a sub-agent to write requirements for the chosen approach. Same INTERNAL / FOR THE ISSUE split.
+Write requirements for the chosen approach. Use INTERNAL / FOR THE ISSUE split.
 
 ## Step 5: User Refinement
 
-Present requirements. Max 2 rounds, then proceed.
+Present requirements. Max 2 clarification rounds, then proceed with best assumptions.

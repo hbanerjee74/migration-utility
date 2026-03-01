@@ -3,10 +3,11 @@ paths:
   - "app/sidecar/**"
 ---
 
-# Bun Sidecar
+# Node Sidecar
 
-Bun sidecar process that runs Claude agents via `@anthropic-ai/claude-agent-sdk`. No hot-reload —
-rebuild after edits: `npm run sidecar:build`.
+Node.js + TypeScript sidecar process that runs Claude agents via
+`@anthropic-ai/claude-agent-sdk`. No hot-reload — rebuild after edits:
+`npm run sidecar:build`.
 
 ## JSONL Protocol
 
@@ -21,29 +22,13 @@ Communicates with the Rust backend via stdin/stdout, one JSON object per line:
 | `{"type":"agent_response","id":"…",…}` | sidecar → Rust | Streaming agent output |
 | `{"type":"agent_error","id":"…","error":"…"}` | sidecar → Rust | Agent failure |
 
-## Key Files
-
-| File | Purpose |
-|---|---|
-| `app/sidecar/index.ts` | Entry point — emits `sidecar_ready`, reads stdin line-by-line, dispatches requests |
-| `app/sidecar/protocol.ts` | JSONL message type definitions and encode/decode helpers |
-| `app/sidecar/agent-runner.ts` | Executes agent requests via Claude Agent SDK, streams responses |
-| `app/src-tauri/src/commands/sidecar.rs` | Rust: spawns sidecar, heartbeat loop, restart on crash |
-
 ## Build
 
 ```bash
-npm run sidecar:build   # Compile TypeScript → standalone Bun binaries for all platforms
+npm run sidecar:build   # Compile TypeScript sidecar into `app/sidecar/dist/`
 ```
 
-Binaries output to `app/src-tauri/binaries/` with Tauri target-triple suffixes:
-
-- `sidecar-aarch64-apple-darwin`
-- `sidecar-x86_64-apple-darwin`
-- `sidecar-x86_64-unknown-linux-gnu`
-- `sidecar-x86_64-pc-windows-msvc.exe`
-
-Registered under `bundle.externalBin` in `tauri.conf.json`.
+Build output is bundled as a Tauri resource from `app/sidecar/dist/**/*`.
 
 ## Testing
 
@@ -64,3 +49,5 @@ console.error("[sidecar] agent_request: starting id=%s", id);  // significant ev
 ```
 
 Never write to stdout except via the JSONL protocol.
+
+Canonical logging requirements (levels, redaction, correlation IDs) are in `.claude/rules/logging-policy.md`.

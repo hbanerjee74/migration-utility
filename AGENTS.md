@@ -24,7 +24,7 @@ Adapter files must not duplicate canonical policy unless they are adding agent-s
 | Styling | Tailwind CSS 4, shadcn/ui |
 | State | Zustand |
 | Icons | Lucide React |
-| Agent sidecar | Bun + `@anthropic-ai/claude-agent-sdk` |
+| Agent sidecar | Node.js + TypeScript + `@anthropic-ai/claude-agent-sdk` |
 | Database | SQLite (`rusqlite` bundled) |
 | Rust errors | `thiserror` |
 | Orchestrator | Python + Claude Agent SDK (`uv` for deps) |
@@ -93,7 +93,6 @@ Determine what you changed, then pick the right runner:
 | Frontend store / hook | `npm run test:unit` |
 | Frontend component / page | `npm run test:integration` + E2E tag from `app/tests/TEST_MANIFEST.md` |
 | Rust command | `cargo test <module>` + E2E tag from `app/tests/TEST_MANIFEST.md` |
-| Bun sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
 | Node sidecar (`app/sidecar/`) | `cd app/sidecar && npx vitest run` |
 | Python orchestrator / agents | `cd orchestrator && uv run pytest <module>` |
 | Unsure | all of the above |
@@ -115,54 +114,25 @@ sentence beats a paragraph. Avoid restating what the code already makes obvious.
 - Stage specific files — use `git add <file>` not `git add .`
 - All `.md` files must pass `markdownlint` before committing (`markdownlint <file>`)
 - Verify before committing: `cd app && npx tsc --noEmit` + `cargo check --manifest-path app/src-tauri/Cargo.toml`
-
-### Naming conventions
-
-**TypeScript** (`app/src/`): files `kebab-case`, components `PascalCase`, functions/variables `camelCase`, constants `UPPER_SNAKE_CASE`. Strict mode, no `any`.
-
-**Python** (`orchestrator/`): files `snake_case`, classes `PascalCase`, functions/variables `snake_case`, constants `UPPER_SNAKE_CASE`. Type annotations required on all function signatures. Use `pathlib.Path`, not `os.path`. Never bare `except:`.
-
-**Rust** (`app/src-tauri/`): standard Rust conventions enforced by `clippy`. Use `thiserror` for error types; propagate with `?`.
+- Canonical naming and error-handling conventions live in `.claude/rules/coding-conventions.md`
 
 ### Frontend (`app/src/`)
 
-Use AD brand CSS variables — never raw Tailwind palette classes (`text-green-500`, `bg-blue-400`, etc.):
+For AD brand rules, component constraints, and state indicator conventions, see:
 
-| Semantic | Usage |
-|---|---|
-| Primary / active | `style={{ color: "var(--color-pacific)" }}` |
-| Success / complete | `style={{ color: "var(--color-seafoam)" }}` |
-| Warning | `text-amber-600 dark:text-amber-400` (no CSS variable for amber) |
-| Error | `text-destructive` — never `text-red-*` |
-| Tinted background | `color-mix(in oklch, var(--color-pacific), transparent 85%)` |
-
-Fonts: Inter Variable (sans) + JetBrains Mono Variable (mono) — never introduce other fonts.
-
-State indicators use fixed icon + colour combinations. Install components from **shadcn/ui only** — no other component libraries. Use **Lucide React** for icons — no other icon library.
-
-Zustand stores: one file per store in `app/src/stores/` (planned). Full rules: `.claude/rules/frontend-design.md`, `.claude/rules/ui-flows.md`.
+- `.claude/rules/frontend-design.md`
 
 ### Rust backend (`app/src-tauri/`)
 
-Every `#[tauri::command]` must:
-
-- Log `info!` on entry with key params: `info!("command_name: key={}", val)`
-- Log `error!` on failure: `error!("command_name: failed: {}", e)`
-- Return `Result<T, CommandError>` where `CommandError` derives `serde::Serialize`
-
-Commands: one module per concern in `src/commands/` (planned). Full rules: `.claude/rules/rust-backend.md`.
+Command conventions, error types, and Rust-specific testing guidance live in `.claude/rules/rust-backend.md`.
 
 ### Sidecar (`app/sidecar/`)
 
-Communicates with Rust via **JSONL on stdin/stdout** — never write anything to stdout except protocol messages. Log to **stderr** only. Rebuild after edits: `npm run sidecar:build`. Full rules: `.claude/rules/agent-sidecar.md`.
+Protocol and sidecar-specific constraints live in `.claude/rules/agent-sidecar.md`.
 
 ### Error handling
 
-Validate at system boundaries only (Fabric API responses, ADF JSON, dbt-core-mcp results, `plan.md` reads) — trust internal guarantees elsewhere.
-
-- **Python:** raise typed exceptions, never swallow silently
-- **TypeScript:** surface typed Tauri errors to the user via error state
-- **Agent tools:** log the error and mark the affected model `BLOCKED` in `plan.md` — don't crash the orchestrator
+See `.claude/rules/coding-conventions.md` for canonical error-handling policy.
 
 ## Issue Management
 
@@ -182,15 +152,7 @@ Use these repo-local skills when requests match:
 
 ## Logging
 
-Every new feature must include logging. Use `logging` module (Python), `log` crate (Rust), and
-`console.*` (frontend). Layer-specific rules are in the relevant `.claude/rules/` file.
-
-| Level | When to use |
-|---|---|
-| **error** | Operation failed, user impact likely |
-| **warn** | Unexpected but recoverable |
-| **info** | Key lifecycle events (command invoked, agent started, plan state changed) |
-| **debug** | Internal details useful only when troubleshooting |
+Every new feature must include logging. Canonical logging conventions and log-level guidance live in `.claude/rules/logging-policy.md`.
 
 ## Gotchas
 

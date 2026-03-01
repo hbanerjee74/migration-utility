@@ -2,7 +2,7 @@
 
 ## Step 1: Investigation
 
-Spawn an `Explore` sub-agent to review code and recent git history. It returns the standard split:
+Review relevant code and recent git history directly first. Use a sub-agent only if parallel analysis is clearly beneficial.
 
 **INTERNAL (coordinator only):** likely root cause, affected scope, recent relevant commits, estimated fix complexity (XS/S/M/L).
 
@@ -14,4 +14,4 @@ Show the user the product-level findings. Ask to confirm or correct.
 
 ## Step 3: Estimate
 
-Use the sub-agent's internal scope signal.
+Estimate from observed scope and impact (XS/S/M/L) based on code findings.

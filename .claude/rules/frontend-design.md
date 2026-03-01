@@ -23,7 +23,7 @@ hardcode hex values or raw Tailwind palette classes (`text-green-500`, `bg-blue-
 
 ## Typography — use the app's font stack
 
-The app uses **Inter Variable** (sans) and **JetBrains Mono Variable** (mono), defined in `globals.css`. Never introduce other fonts.
+Use the fonts defined in `app/src/styles/globals.css`. If typography changes, update the shared tokens there rather than introducing per-component font overrides.
 
 | Level | Tailwind | Weight | Tracking | Use for |
 |---|---|---|---|---|
@@ -67,76 +67,47 @@ Every pipeline/agent state maps to a fixed colour + icon combination. Never inve
 | Failed | `text-destructive` | `XCircle` | `bg-destructive/15` |
 | Blocked | `text-amber-600 dark:text-amber-400` | `AlertTriangle` | `bg-amber-100 dark:bg-amber-900/30` |
 
-Candidacy tier badges follow the same mapping — Migrate = running colours, Review = warning colours, Reject = error colours.
-
 All badges: `rounded-full text-xs font-medium px-2 py-0.5`.
 
 ## Icons
 
 Use **Lucide React** (`lucide-react`) exclusively. Never install a second icon library.
 
-| Icon | Semantic | Where used |
-|---|---|---|
-| `CheckCircle2` | Complete / confirmed | Stepper complete, table confirmed, phase complete |
-| `Circle` | Pending (no time reference) | Stepper pending |
-| `Clock` | Pending (time-aware) | Agent phase not yet started |
-| `ChevronRight` | Active step indicator | Stepper active |
-| `Loader2` + `animate-spin` | Running | Agent phases, async loading |
-| `XCircle` | Failed | Agent phase failed |
-| `AlertTriangle` | Blocked / warning | BLOCKED procedures, recoverable warnings |
-| `Pencil` | User override | Candidacy OVR column, FDE-edited fields |
-| `ChevronDown` | Row expansion | Collapsible trigger |
-| `Wand2` | AI origin (optional label decoration) | AI-suggested field indicator |
+| Icon | Semantic |
+|---|---|
+| `CheckCircle2` | Complete / confirmed |
+| `Circle` | Pending (no time reference) |
+| `Clock` | Pending (time-aware) |
+| `ChevronRight` | Active step indicator |
+| `Loader2` + `animate-spin` | Running |
+| `XCircle` | Failed |
+| `AlertTriangle` | Blocked / warning |
+| `ChevronDown` | Row expansion |
 
 Icon colours follow the state indicator table above. Apply via `style={{ color: "var(...)" }}` or a Tailwind color class matching the state rules.
-
-## AI-Suggested Fields
-
-Fields pre-populated by an agent get a **2px pacific left border** to signal AI origin. When the FDE edits the field, remove the border — the field is now FDE-owned.
-
-```tsx
-// Wrapper when field is AI-suggested
-<div style={{ borderLeft: "2px solid var(--color-pacific)", paddingLeft: "8px" }}>
-  <label className="text-xs text-muted-foreground">
-    Incremental column
-    <Wand2 className="inline ml-1 w-3 h-3 text-muted-foreground" /> {/* optional */}
-  </label>
-  <Combobox ... />
-</div>
-
-// Wrapper after FDE edits — border removed
-<div style={{ paddingLeft: "10px" }}>
-  ...
-</div>
-```
-
-Apply to: `table_type`, `load_strategy`, `snapshot_strategy`, `incremental_column`, `date_column`, `pii_columns` in Table Config — any field the candidacy agent pre-populates.
 
 ## Components (shadcn/ui)
 
 Install from shadcn/ui only. Do not bring in other component libraries.
 
-| Component | Use in this project |
+| Component | Typical use |
 |---|---|
-| `Table`, `TableRow`, `TableCell` | Scope selection, candidacy review, launch monitor |
-| `Checkbox` | Per-row and group select-all in Scope |
-| `Input` | Search fields, text inputs |
-| `Select` | Filter dropdowns, field pickers |
-| `Button` | All CTAs and actions |
-| `Badge` | State chips, tier indicators |
-| `Card`, `Separator` | Form section containers |
-| `Sheet` | Right-sliding drawer — candidacy override, detail panels |
-| `RadioGroup` | Tier picker inside Sheet |
-| `Textarea` | Override reason, free-text inputs |
-| `ResizablePanelGroup`, `ResizablePanel` | Master-detail split (Table Config) |
-| `Combobox` | Searchable column name pickers |
-| `ScrollArea` | Scrollable lists, log streams |
-| `Progress` | Overall completion bar (Monitor) |
-| `Collapsible` | Expandable phase groups, run history (Monitor, Usage) |
+| `Table`, `TableRow`, `TableCell` | Data-heavy tabular views |
+| `Checkbox` | Multi-select and opt-in controls |
+| `Input` | Free-form text input |
+| `Select` | Small predefined option sets |
+| `Button` | Primary and secondary actions |
+| `Badge` | Compact status indicators |
+| `Card`, `Separator` | Grouping and section boundaries |
+| `Sheet` | Contextual side panels |
+| `RadioGroup` | Single choice among a few options |
+| `Textarea` | Multi-line user input |
+| `ResizablePanelGroup`, `ResizablePanel` | Split-pane layouts |
+| `Combobox` | Searchable option picking |
+| `ScrollArea` | Scrollable bounded regions |
+| `Progress` | Percent-complete feedback |
+| `Collapsible` | Progressive disclosure |
 
 ## Logging
 
-- `console.error()` for caught errors
-- `console.warn()` for unexpected states
-- `console.log()` for significant user actions (navigation, form submissions, migration triggered)
-- Do not log render cycles or state reads
+Canonical logging requirements (levels, redaction, correlation IDs) are in `.claude/rules/logging-policy.md`.
