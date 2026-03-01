@@ -34,6 +34,19 @@ Adapter files must not duplicate canonical policy unless they are adding agent-s
 
 **Source scope:** Fabric Warehouse (T-SQL stored procedures via ADF pipelines). Lakehouse/Spark is post-MVP.
 
+## Repository Folder Map
+
+Use this map before reasoning about implementation location:
+
+- `app/src/` — frontend runtime code (React/TypeScript surfaces, components, stores, hooks).
+- `app/src-tauri/src/` — Rust backend runtime code (Tauri commands, DB, logging, startup wiring).
+- `app/sidecar/` — Node/TypeScript sidecar runtime code.
+- `app/e2e/` — Playwright E2E tests only.
+- `app/src/__tests__/` and `app/sidecar/__tests__/` — unit/integration tests only.
+- `docs/` — documentation and design/reference material only; do not treat as executable source unless explicitly asked.
+- `scripts/` — developer/automation scripts.
+- `orchestrator/` — Python orchestration runtime + tests.
+
 ## Dev Commands
 
 ```bash
