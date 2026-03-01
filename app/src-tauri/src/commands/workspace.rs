@@ -940,6 +940,33 @@ mod tests {
     }
 
     #[test]
+    fn discover_source_databases_validates_port_bounds() {
+        let args = DiscoverSourceDatabasesArgs {
+            source_type: "sql_server".to_string(),
+            source_server: "localhost".to_string(),
+            source_port: 0,
+            source_authentication_mode: "sql_password".to_string(),
+            source_username: "sa".to_string(),
+            source_password: "secret".to_string(),
+            source_encrypt: true,
+            source_trust_server_certificate: false,
+        };
+        assert!(workspace_discover_source_databases(args).is_err());
+
+        let args = DiscoverSourceDatabasesArgs {
+            source_type: "sql_server".to_string(),
+            source_server: "localhost".to_string(),
+            source_port: 65536,
+            source_authentication_mode: "sql_password".to_string(),
+            source_username: "sa".to_string(),
+            source_password: "secret".to_string(),
+            source_encrypt: true,
+            source_trust_server_certificate: false,
+        };
+        assert!(workspace_discover_source_databases(args).is_err());
+    }
+
+    #[test]
     fn clear_workspace_state_deletes_workspace_and_children() {
         let conn = db::open_in_memory().unwrap();
         conn.execute(

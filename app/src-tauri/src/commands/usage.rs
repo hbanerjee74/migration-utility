@@ -417,7 +417,18 @@ mod tests {
     fn invalid_run_id_is_rejected() {
         assert!(!is_valid_run_id("../etc/passwd"));
         assert!(!is_valid_run_id("agent-../../etc/passwd"));
+        assert!(!is_valid_run_id("agent-%2e%2e%2fetc%2fpasswd"));
+        assert!(!is_valid_run_id("agent-123e4567-e89b-12d3-a456-426614174000/../../tmp"));
         assert!(!is_valid_run_id("agent-not-a-uuid"));
         assert!(!is_valid_run_id("123e4567-e89b-12d3-a456-426614174000"));
+    }
+
+    #[test]
+    fn run_id_length_is_bounded() {
+        assert!(is_valid_run_id("agent-123e4567-e89b-12d3-a456-426614174000"));
+        assert!(!is_valid_run_id(&format!(
+            "agent-{}",
+            "a".repeat(65)
+        )));
     }
 }
