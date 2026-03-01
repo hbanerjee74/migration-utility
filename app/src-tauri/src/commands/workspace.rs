@@ -1318,8 +1318,13 @@ pub fn workspace_get(state: State<DbState>) -> Result<Option<Workspace>, Command
 mod tests {
     use super::*;
     use crate::db;
+    use crate::source_sql::{resolve_source_query, SourceQuery};
     use std::fs;
     use tempfile::tempdir;
+    use tiberius::{AuthMethod, Client, Config, EncryptionLevel};
+    use tokio::net::TcpStream;
+    use tokio::runtime::Builder as RuntimeBuilder;
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
 
     #[test]
     fn create_and_get_workspace() {
@@ -1693,5 +1698,241 @@ mod tests {
 
         assert!(repo.exists());
         assert!(repo.is_dir());
+    }
+
+    #[test]
+    fn reset_flow_clears_sqlite_state_and_repo_contents() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("migration-repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::write(repo.join(".git").join("config"), "gitdir").unwrap();
+        fs::write(repo.join("README.md"), "content").unwrap();
+
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                "ws-reset",
+                "Workspace",
+                repo.to_str().unwrap(),
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                "source-db-ws-reset",
+                "ws-reset",
+                "WideWorldImportersDW",
+                "Warehouse"
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_schemas(warehouse_item_id, schema_name) VALUES (?1, ?2)",
+            rusqlite::params!["source-db-ws-reset", "Sales"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["source-db-ws-reset", "Sales", "Orders"],
+        )
+        .unwrap();
+
+        clear_migration_repo_contents(repo.to_str().unwrap()).unwrap();
+        clear_workspace_state(&conn).unwrap();
+
+        let workspaces: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
+            .unwrap();
+        let items: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
+            .unwrap();
+        let schemas: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let tables: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(workspaces, 0);
+        assert_eq!(items, 0);
+        assert_eq!(schemas, 0);
+        assert_eq!(tables, 0);
+
+        let entries: Vec<_> = fs::read_dir(&repo).unwrap().collect();
+        assert!(repo.exists());
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    #[ignore = "requires reachable SQL Server (e.g. Docker)"]
+    fn sql_server_inventory_populates_sqlite_on_apply_path() {
+        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port: u16 = std::env::var("MIGRATION_TEST_SQL_SERVER_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(1433);
+        let username =
+            std::env::var("MIGRATION_TEST_SQL_SERVER_USER").unwrap_or_else(|_| "sa".to_string());
+        let password = std::env::var("MIGRATION_TEST_SQL_SERVER_PASSWORD")
+            .unwrap_or_else(|_| "YourStrong!Passw0rd".to_string());
+        let database = std::env::var("MIGRATION_TEST_SQL_SERVER_DATABASE")
+            .unwrap_or_else(|_| "WideWorldImportersDW".to_string());
+
+        let mut config = Config::new();
+        config.host(&host);
+        config.port(port);
+        config.database(&database);
+        config.authentication(AuthMethod::sql_server(&username, &password));
+        config.encryption(EncryptionLevel::Off);
+        config.trust_cert();
+
+        let rt = RuntimeBuilder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
+
+        let (schemas, tables, procedures) = rt.block_on(async {
+            let tcp = TcpStream::connect(config.get_addr())
+                .await
+                .expect("failed to connect to SQL Server");
+            tcp.set_nodelay(true).expect("failed to set TCP nodelay");
+            let mut client = Client::connect(config, tcp.compat_write())
+                .await
+                .expect("failed to authenticate to SQL Server");
+
+            let schemas_sql = resolve_source_query("sql_server", SourceQuery::DiscoverSchemas)
+                .expect("missing schemas query");
+            let tables_sql = resolve_source_query("sql_server", SourceQuery::DiscoverTables)
+                .expect("missing tables query");
+            let procedures_sql =
+                resolve_source_query("sql_server", SourceQuery::DiscoverProcedures)
+                    .expect("missing procedures query");
+
+            let schema_rows = client
+                .simple_query(schemas_sql)
+                .await
+                .expect("schema query failed")
+                .into_first_result()
+                .await
+                .expect("schema result parse failed");
+            let table_rows = client
+                .simple_query(tables_sql)
+                .await
+                .expect("table query failed")
+                .into_first_result()
+                .await
+                .expect("table result parse failed");
+            let procedure_rows = client
+                .simple_query(procedures_sql)
+                .await
+                .expect("procedure query failed")
+                .into_first_result()
+                .await
+                .expect("procedure result parse failed");
+
+            let schemas: Vec<WarehouseSchema> = schema_rows
+                .into_iter()
+                .filter_map(|row| {
+                    row.get::<&str, _>(1).map(|schema_name| WarehouseSchema {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        schema_id_local: row.get::<i64, _>(0),
+                    })
+                })
+                .collect();
+            let tables: Vec<WarehouseTable> = table_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let schema_name = row.get::<&str, _>(0)?;
+                    let table_name = row.get::<&str, _>(1)?;
+                    Some(WarehouseTable {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        table_name: table_name.to_string(),
+                        object_id_local: row.get::<i64, _>(2),
+                    })
+                })
+                .collect();
+            let procedures: Vec<WarehouseProcedure> = procedure_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let schema_name = row.get::<&str, _>(0)?;
+                    let procedure_name = row.get::<&str, _>(1)?;
+                    Some(WarehouseProcedure {
+                        warehouse_item_id: String::new(),
+                        schema_name: schema_name.to_string(),
+                        procedure_name: procedure_name.to_string(),
+                        object_id_local: row.get::<i64, _>(2),
+                        sql_body: row.get::<&str, _>(3).map(|v| v.to_string()),
+                    })
+                })
+                .collect();
+
+            (schemas, tables, procedures)
+        });
+
+        assert!(!schemas.is_empty(), "expected schemas from SQL Server");
+        assert!(!tables.is_empty(), "expected tables from SQL Server");
+        assert!(
+            !procedures.is_empty(),
+            "expected procedures from SQL Server"
+        );
+
+        let conn = db::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-live", "Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        persist_sql_server_inventory(
+            &conn,
+            "ws-live",
+            &database,
+            SqlServerInventory {
+                schemas,
+                tables,
+                procedures,
+            },
+        )
+        .unwrap();
+
+        let items_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
+            .unwrap();
+        let schemas_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let tables_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let procedures_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_procedures", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let db_item_name: String = conn
+            .query_row("SELECT display_name FROM items LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+
+        assert_eq!(items_count, 1);
+        assert!(schemas_count > 0);
+        assert!(tables_count > 0);
+        assert!(procedures_count > 0);
+        assert_eq!(db_item_name, database);
     }
 }
