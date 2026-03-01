@@ -29,6 +29,7 @@ message mapping only when adding user-facing context.
 
 - Do not hardcode source-related SQL in Rust command files.
 - All source-related SQL must live under `app/src-tauri/sql/source/<source_type>/` (organized by query intent) and be loaded only via `resolve_source_query(...)`.
+- For any schema or persistence model change, follow `.claude/rules/db-schema-change.md` end-to-end.
 - Define foreign keys with `ON DELETE CASCADE` for app table relationships so parent deletes clean up dependent rows.
 - Exception: usage/log snapshot tables must not have foreign keys to mutable entities; they must preserve point-in-time records and remain unaffected by parent-row deletes.
 - Use parameterized SQL (`?1`, `?2`, `params![...]`) for SQLite writes; never build SQL by interpolating user input.
