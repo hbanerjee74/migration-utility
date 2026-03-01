@@ -41,6 +41,10 @@ pub fn should_log_source_sql() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tiberius::{AuthMethod, Client, Config, EncryptionLevel};
+    use tokio::net::TcpStream;
+    use tokio::runtime::Builder as RuntimeBuilder;
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
 
     #[test]
     fn resolves_discover_db_for_sql_server() {
@@ -61,5 +65,70 @@ mod tests {
             CommandError::Io(msg) => assert!(msg.contains("Unsupported source query lookup")),
             _ => panic!("expected io error"),
         }
+    }
+
+    #[test]
+    #[ignore = "requires reachable SQL Server (e.g. Docker)"]
+    fn discover_databases_query_executes_against_real_sql_server() {
+        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port: u16 = std::env::var("MIGRATION_TEST_SQL_SERVER_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(1433);
+        let username =
+            std::env::var("MIGRATION_TEST_SQL_SERVER_USER").unwrap_or_else(|_| "sa".to_string());
+        let password = std::env::var("MIGRATION_TEST_SQL_SERVER_PASSWORD")
+            .unwrap_or_else(|_| "YourStrong!Passw0rd".to_string());
+        let database = std::env::var("MIGRATION_TEST_SQL_SERVER_DATABASE")
+            .unwrap_or_else(|_| "WideWorldImportersDW".to_string());
+
+        let sql = resolve_source_query("sql_server", SourceQuery::DiscoverDatabases).unwrap();
+
+        let mut config = Config::new();
+        config.host(&host);
+        config.port(port);
+        config.database(&database);
+        config.authentication(AuthMethod::sql_server(&username, &password));
+        config.encryption(EncryptionLevel::Off);
+        config.trust_cert();
+
+        let rt = RuntimeBuilder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let tcp = TcpStream::connect(config.get_addr())
+                .await
+                .expect("failed to connect to SQL Server");
+            tcp.set_nodelay(true).expect("failed to set TCP nodelay");
+
+            let mut client = Client::connect(config, tcp.compat_write())
+                .await
+                .expect("failed to authenticate to SQL Server");
+
+            let rows = client
+                .simple_query(sql)
+                .await
+                .expect("query execution failed")
+                .into_first_result()
+                .await
+                .expect("failed to parse query result");
+
+            let names: Vec<String> = rows
+                .into_iter()
+                .filter_map(|row| row.get::<&str, _>(0).map(|name| name.to_string()))
+                .collect();
+
+            assert!(
+                !names.is_empty(),
+                "expected at least one accessible database in query result"
+            );
+            assert!(
+                names.iter().any(|n| n.eq_ignore_ascii_case("WideWorldImportersDW")),
+                "expected WideWorldImportersDW to be discoverable; got: {names:?}"
+            );
+        });
     }
 }
