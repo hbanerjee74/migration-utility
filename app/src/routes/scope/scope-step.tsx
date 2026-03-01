@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -24,11 +25,12 @@ function keyForRow(row: ScopeInventoryRow): string {
 }
 
 export default function ScopeStep() {
+  const navigate = useNavigate();
   const { workspaceId, appPhase, phaseFacts, setAppPhaseState } = useWorkflowStore();
   const isLocked = phaseFacts.scopeFinalized || appPhase === 'running_locked';
   const [rows, setRows] = useState<ScopeInventoryRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string>('Scope editable');
+  const [message, setMessage] = useState<string>('Saved just now');
   const [error, setError] = useState<string | null>(null);
   const [schemaSearch, setSchemaSearch] = useState('');
   const [tableSearch, setTableSearch] = useState('');
@@ -193,9 +195,7 @@ export default function ScopeStep() {
           <div className="space-y-1">
             <p className="text-sm font-medium">{selectedCount} tables selected</p>
             <p className="text-xs text-muted-foreground">{message}</p>
-            <p className="text-xs text-muted-foreground">
-              {isLocked ? 'Scope finalized (read-only)' : 'Scope editable'}
-            </p>
+            <p className="text-xs text-muted-foreground">{isLocked ? 'Scope finalized (read-only)' : 'Scope editable'}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -217,6 +217,24 @@ export default function ScopeStep() {
             >
               {isLocked ? 'Scope Finalized' : 'Finalize Scope'}
             </Button>
+          </div>
+        </div>
+        <div className="mt-4 border-b border-border">
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              className="border-b-2 border-primary pb-2 text-sm font-medium text-primary"
+              onClick={() => navigate('/scope')}
+            >
+              1. Select Tables
+            </button>
+            <button
+              type="button"
+              className="border-b-2 border-transparent pb-2 text-sm font-medium text-muted-foreground"
+              onClick={() => navigate('/scope/config')}
+            >
+              2. Table Details
+            </button>
           </div>
         </div>
       </header>

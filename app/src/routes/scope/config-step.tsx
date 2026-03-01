@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,6 +31,7 @@ function toPayload(detail: TableDetailRow): TableConfigPayload {
 }
 
 export default function ConfigStep() {
+  const navigate = useNavigate();
   const { workspaceId, appPhase, phaseFacts, setAppPhaseState } = useWorkflowStore();
   const isLocked = phaseFacts.scopeFinalized || appPhase === 'running_locked';
   const [rows, setRows] = useState<TableDetailRow[]>([]);
@@ -38,7 +40,7 @@ export default function ConfigStep() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState('Scope editable');
+  const [message, setMessage] = useState('Saved just now');
   const [refreshing, setRefreshing] = useState(false);
   const autosaveTimerRef = useRef<number | null>(null);
 
@@ -90,6 +92,8 @@ export default function ConfigStep() {
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [rows]);
+  const readyCount = rows.filter((r) => r.status === 'Ready').length;
+  const needsDetails = rows.length - readyCount;
 
   async function persist(next: TableDetailRow) {
     setSaving(true);
@@ -189,13 +193,19 @@ export default function ConfigStep() {
       <header className="rounded-md border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-sm font-medium">
-              {rows.filter((r) => r.status === 'Ready').length} / {rows.length} tables ready
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Scope — Table details capture
             </p>
-            <p className="text-xs text-muted-foreground">{message}</p>
-            <p className="text-xs text-muted-foreground">
-              {isLocked ? 'Scope finalized (read-only)' : 'Scope editable'}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+                {readyCount} / {rows.length} tables ready
+              </span>
+              <span className="text-xs text-muted-foreground">Needs details for {needsDetails} tables</span>
+              <span className="text-xs text-muted-foreground">{message}</span>
+              <span className="text-xs text-muted-foreground">
+                {isLocked ? 'Scope finalized (read-only)' : 'Scope editable'}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -212,12 +222,34 @@ export default function ConfigStep() {
             </Button>
           </div>
         </div>
+        <div className="mt-4 border-b border-border">
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              className="border-b-2 border-transparent pb-2 text-sm font-medium text-muted-foreground"
+              onClick={() => navigate('/scope')}
+            >
+              1. Select Tables
+            </button>
+            <button
+              type="button"
+              className="border-b-2 border-primary pb-2 text-sm font-medium text-primary"
+              onClick={() => navigate('/scope/config')}
+            >
+              2. Table Details
+            </button>
+          </div>
+        </div>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <div className="rounded-md border bg-card">
-          <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-            Name / Schema / Status
+          <div className="grid grid-cols-[34px_1fr_1fr_80px_120px] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+            <span />
+            <span>Name</span>
+            <span>Schema</span>
+            <span>Rows</span>
+            <span>Status</span>
           </div>
           <div className="max-h-[560px] overflow-auto">
             {loading && <p className="p-3 text-sm text-muted-foreground">Loading details...</p>}
@@ -227,21 +259,35 @@ export default function ConfigStep() {
             {!loading &&
               grouped.map(([schema, schemaRows]) => (
                 <div key={schema}>
-                  <div className="border-b bg-muted/50 px-3 py-2 text-xs font-medium">{schema}</div>
+                  <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs">
+                    <span className="font-medium">{schema}</span>
+                    <span className="text-muted-foreground">{schemaRows.length} selected</span>
+                  </div>
                   {schemaRows.map((row) => (
                     <button
                       key={row.selectedTableId}
                       type="button"
-                      className={`grid w-full grid-cols-[1fr_auto] items-center gap-2 border-b px-3 py-2 text-left text-sm ${
-                        row.selectedTableId === activeId ? 'bg-accent/40' : ''
+                      className={`grid w-full grid-cols-[34px_1fr_1fr_80px_120px] items-center gap-2 border-b px-3 py-2 text-left text-sm ${
+                        row.selectedTableId === activeId ? 'bg-primary/10' : ''
                       }`}
                       onClick={() => {
                         setActiveId(row.selectedTableId);
                         setDraft(row);
                       }}
                     >
+                      <input type="radio" readOnly checked={row.selectedTableId === activeId} />
                       <span className="font-mono">{row.tableName}</span>
-                      <span className="text-xs text-muted-foreground">{row.status}</span>
+                      <span className="font-mono text-muted-foreground">{row.schemaName}</span>
+                      <span className="font-mono text-muted-foreground">--</span>
+                      <span
+                        className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${
+                          row.status === 'Ready'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                      >
+                        {row.status}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -319,12 +365,28 @@ export default function ConfigStep() {
                   />
                 </label>
                 <label className="space-y-1 text-sm md:col-span-2">
-                  <span>PII columns (comma separated)</span>
+                  <span>PII columns (required for fixture masking)</span>
                   <Input
                     value={draft.piiColumns ?? ''}
                     disabled={isLocked}
                     onChange={(e) => updateDraft('piiColumns', e.target.value || null)}
                   />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>PK columns</span>
+                  <Input value='["sale_id"]' disabled />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Grain columns</span>
+                  <Input value='["sale_id"]' disabled />
+                </label>
+                <label className="space-y-1 text-sm md:col-span-2">
+                  <span>Relationships (required for tests)</span>
+                  <Input value='[{"column":"customer_id","ref_table":"dim_customer"}]' disabled />
+                </label>
+                <label className="space-y-1 text-sm md:col-span-2">
+                  <span>SCD (dimensions only)</span>
+                  <Input value="scd_type=none" disabled />
                 </label>
               </div>
 
