@@ -9,7 +9,7 @@ CREATE TABLE workspaces (
 
 CREATE TABLE items (
   id                TEXT PRIMARY KEY,
-  workspace_id      TEXT NOT NULL REFERENCES workspaces(id),
+  workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   display_name      TEXT NOT NULL,
   description       TEXT,
   folder_id         TEXT,
@@ -20,7 +20,7 @@ CREATE TABLE items (
 );
 
 CREATE TABLE warehouse_schemas (
-  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   schema_name       TEXT NOT NULL,
   schema_id_local   INTEGER,
   PRIMARY KEY (warehouse_item_id, schema_name)
@@ -33,7 +33,7 @@ CREATE TABLE warehouse_tables (
   object_id_local   INTEGER,
   PRIMARY KEY (warehouse_item_id, schema_name, table_name),
   FOREIGN KEY (warehouse_item_id, schema_name)
-    REFERENCES warehouse_schemas(warehouse_item_id, schema_name)
+    REFERENCES warehouse_schemas(warehouse_item_id, schema_name) ON DELETE CASCADE
 );
 
 CREATE TABLE warehouse_procedures (
@@ -44,15 +44,15 @@ CREATE TABLE warehouse_procedures (
   sql_body          TEXT,
   PRIMARY KEY (warehouse_item_id, schema_name, procedure_name),
   FOREIGN KEY (warehouse_item_id, schema_name)
-    REFERENCES warehouse_schemas(warehouse_item_id, schema_name)
+    REFERENCES warehouse_schemas(warehouse_item_id, schema_name) ON DELETE CASCADE
 );
 
 CREATE TABLE pipeline_activities (
   id                       INTEGER PRIMARY KEY AUTOINCREMENT,
-  pipeline_item_id         TEXT NOT NULL REFERENCES items(id),
+  pipeline_item_id         TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   activity_name            TEXT NOT NULL,
   activity_type            TEXT NOT NULL,
-  target_warehouse_item_id TEXT REFERENCES items(id),
+  target_warehouse_item_id TEXT REFERENCES items(id) ON DELETE CASCADE,
   target_schema_name       TEXT,
   target_procedure_name    TEXT,
   parameters_json          TEXT,
@@ -64,24 +64,24 @@ CREATE TABLE pipeline_activities (
 
 CREATE TABLE selected_tables (
   id                TEXT PRIMARY KEY,
-  workspace_id      TEXT NOT NULL REFERENCES workspaces(id),
-  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   schema_name       TEXT NOT NULL,
   table_name        TEXT NOT NULL
 );
 
 CREATE TABLE table_artifacts (
-  selected_table_id    TEXT PRIMARY KEY REFERENCES selected_tables(id),
-  warehouse_item_id    TEXT NOT NULL REFERENCES items(id),
+  selected_table_id    TEXT PRIMARY KEY REFERENCES selected_tables(id) ON DELETE CASCADE,
+  warehouse_item_id    TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   schema_name          TEXT NOT NULL,
   procedure_name       TEXT NOT NULL,
-  pipeline_activity_id INTEGER REFERENCES pipeline_activities(id),
+  pipeline_activity_id INTEGER REFERENCES pipeline_activities(id) ON DELETE CASCADE,
   discovery_status     TEXT NOT NULL
     CHECK(discovery_status IN ('resolved','orphan','duplicate_writer'))
 );
 
 CREATE TABLE candidacy (
-  warehouse_item_id TEXT NOT NULL REFERENCES items(id),
+  warehouse_item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   schema_name       TEXT NOT NULL,
   procedure_name    TEXT NOT NULL,
   tier              TEXT NOT NULL
@@ -93,7 +93,7 @@ CREATE TABLE candidacy (
 );
 
 CREATE TABLE table_config (
-  selected_table_id   TEXT PRIMARY KEY REFERENCES selected_tables(id),
+  selected_table_id   TEXT PRIMARY KEY REFERENCES selected_tables(id) ON DELETE CASCADE,
   table_type          TEXT
     CHECK(table_type IN ('fact','dimension','unknown')),
   load_strategy       TEXT

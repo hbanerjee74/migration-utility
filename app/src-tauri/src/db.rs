@@ -31,6 +31,14 @@ const MIGRATIONS: &[(i64, &str)] = &[
         6,
         include_str!("../migrations/006_add_workspace_source_connection.sql"),
     ),
+    (
+        7,
+        include_str!("../migrations/007_add_fk_delete_cascade.sql"),
+    ),
+    (
+        8,
+        include_str!("../migrations/008_add_canonical_source_model.sql"),
+    ),
 ];
 
 pub fn open(path: &Path) -> Result<Connection, DbError> {
@@ -135,6 +143,20 @@ mod tests {
             "candidacy",
             "table_config",
             "settings",
+            "sources",
+            "containers",
+            "namespaces",
+            "data_objects",
+            "orchestration_items",
+            "orchestration_activities",
+            "activity_object_links",
+            "sqlserver_object_columns",
+            "sqlserver_constraints_indexes",
+            "sqlserver_partitions",
+            "sqlserver_procedure_parameters",
+            "sqlserver_procedure_runtime_stats",
+            "sqlserver_procedure_lineage",
+            "sqlserver_table_ddl_snapshots",
         ];
         for table in expected {
             let count: i64 = conn
@@ -158,7 +180,7 @@ mod tests {
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM schema_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(count, 6, "schema_version should have exactly 6 rows");
+        assert_eq!(count, 8, "schema_version should have exactly 8 rows");
     }
 
     #[test]
@@ -173,23 +195,18 @@ mod tests {
               version    INTEGER PRIMARY KEY,
               applied_at TEXT NOT NULL
             );
-            CREATE TABLE workspaces (
-              id                  TEXT PRIMARY KEY,
-              display_name        TEXT NOT NULL,
-              migration_repo_path TEXT NOT NULL,
-              fabric_url          TEXT,
-              created_at          TEXT NOT NULL
-            );
-            CREATE TABLE settings (
-              key   TEXT PRIMARY KEY,
-              value TEXT NOT NULL
-            );
             INSERT INTO schema_version(version, applied_at) VALUES (1, datetime('now'));
             INSERT INTO schema_version(version, applied_at) VALUES (2, datetime('now'));
             INSERT INTO schema_version(version, applied_at) VALUES (3, datetime('now'));
             "#,
         )
         .unwrap();
+        conn.execute_batch(include_str!("../migrations/001_initial_schema.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../migrations/002_add_fabric_url.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../migrations/003_add_settings.sql"))
+            .unwrap();
 
         run_migrations(&conn).expect("migrations failed");
 
@@ -278,5 +295,69 @@ mod tests {
             )
             .unwrap();
         assert_eq!(sp_id.as_deref(), Some("sp-id-123"));
+    }
+
+    #[test]
+    fn deleting_workspace_cascades_to_dependent_tables() {
+        let conn = open_memory();
+        conn.execute(
+            "INSERT INTO workspaces(id, display_name, migration_repo_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["ws-1", "Migration Workspace", "/tmp/repo", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO items(id, workspace_id, display_name, item_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["item-1", "ws-1", "AdventureWorks", "Warehouse"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_schemas(warehouse_item_id, schema_name, schema_id_local) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["item-1", "dbo", 1i64],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name, object_id_local) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["item-1", "dbo", "Customers", 100i64],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["st-1", "ws-1", "item-1", "dbo", "Customers"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO table_config(selected_table_id, table_type) VALUES (?1, ?2)",
+            rusqlite::params!["st-1", "fact"],
+        )
+        .unwrap();
+
+        conn.execute("DELETE FROM workspaces WHERE id=?1", ["ws-1"])
+            .unwrap();
+
+        let items: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
+            .unwrap();
+        let schemas: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let tables: i64 = conn
+            .query_row("SELECT COUNT(*) FROM warehouse_tables", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let selected: i64 = conn
+            .query_row("SELECT COUNT(*) FROM selected_tables", [], |row| row.get(0))
+            .unwrap();
+        let config: i64 = conn
+            .query_row("SELECT COUNT(*) FROM table_config", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(items, 0);
+        assert_eq!(schemas, 0);
+        assert_eq!(tables, 0);
+        assert_eq!(selected, 0);
+        assert_eq!(config, 0);
     }
 }

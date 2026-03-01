@@ -3,6 +3,7 @@ use crate::types::CommandError;
 #[derive(Clone, Copy, Debug)]
 pub enum SourceQuery {
     DiscoverDatabases,
+    DiscoverContainerId,
     DiscoverSchemas,
     DiscoverTables,
     DiscoverProcedures,
@@ -12,6 +13,7 @@ impl SourceQuery {
     pub fn name(self) -> &'static str {
         match self {
             SourceQuery::DiscoverDatabases => "discover_databases",
+            SourceQuery::DiscoverContainerId => "discover_container_id",
             SourceQuery::DiscoverSchemas => "discover_schemas",
             SourceQuery::DiscoverTables => "discover_tables",
             SourceQuery::DiscoverProcedures => "discover_procedures",
@@ -29,6 +31,9 @@ pub fn resolve_source_query(
         )),
         ("fabric_warehouse", SourceQuery::DiscoverDatabases) => Ok(include_str!(
             "../sql/source/fabric_warehouse/discover_databases.sql"
+        )),
+        ("sql_server", SourceQuery::DiscoverContainerId) => Ok(include_str!(
+            "../sql/source/sql_server/discover_container_id.sql"
         )),
         ("sql_server", SourceQuery::DiscoverSchemas) => Ok(include_str!(
             "../sql/source/sql_server/discover_schemas.sql"
@@ -87,6 +92,10 @@ mod tests {
 
     #[test]
     fn resolves_sql_server_source_inventory_queries() {
+        let container =
+            resolve_source_query("sql_server", SourceQuery::DiscoverContainerId).unwrap();
+        assert!(container.contains("DB_ID()"));
+
         let schemas = resolve_source_query("sql_server", SourceQuery::DiscoverSchemas).unwrap();
         assert!(schemas.contains("sys.schemas"));
 
@@ -186,6 +195,8 @@ mod tests {
         let tables_sql = resolve_source_query("sql_server", SourceQuery::DiscoverTables).unwrap();
         let procedures_sql =
             resolve_source_query("sql_server", SourceQuery::DiscoverProcedures).unwrap();
+        let container_sql =
+            resolve_source_query("sql_server", SourceQuery::DiscoverContainerId).unwrap();
 
         let mut config = Config::new();
         config.host(&host);
@@ -221,6 +232,21 @@ mod tests {
             assert!(
                 !schema_rows.is_empty(),
                 "expected schema discovery to return at least one row"
+            );
+
+            let container_rows = client
+                .simple_query(container_sql)
+                .await
+                .expect("container query execution failed")
+                .into_first_result()
+                .await
+                .expect("failed to parse container query result");
+            assert!(
+                container_rows
+                    .first()
+                    .and_then(|row| row.get::<i64, _>(0))
+                    .is_some(),
+                "expected container discovery to return DB_ID()"
             );
 
             let table_rows = client
