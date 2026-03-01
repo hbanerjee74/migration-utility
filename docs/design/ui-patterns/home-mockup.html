@@ -432,6 +432,40 @@
       font-weight: 600;
     }
     .scope-table-row + .scope-table-row { border-top: 1px solid var(--border); }
+    .scope-select-head,
+    .scope-select-row {
+      display: grid;
+      grid-template-columns: 24px .9fr 1.2fr .7fr .9fr;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .scope-select-head {
+      color: var(--fg-muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .scope-select-row + .scope-select-row { border-top: 1px solid var(--border); }
+    .scope-sort-btn {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .scope-sort-arrow {
+      color: var(--fg-subtle);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1;
+    }
     .scope-note-list {
       margin-top: 10px;
       display: flex;
@@ -747,10 +781,10 @@
           <div class="scope-shell">
             <div class="scope-header">
               <div class="scope-summary">
-                <span class="chip chip-blue">14 tables selected</span>
-                <span class="text-xs text-muted">Saved 2m ago</span>
+                <span class="chip chip-blue" id="scope-select-count-chip">14 tables selected</span>
+                <span class="text-xs text-muted" id="scope-select-meta-text">Saved 2m ago</span>
               </div>
-              <button class="btn btn-outline btn-sm">Reset selection</button>
+              <button class="btn btn-outline btn-sm" onclick="refreshScopeSchema()">Refresh schema</button>
             </div>
 
             <div class="scope-tabbar">
@@ -762,56 +796,110 @@
 
             <div class="card" style="overflow-y:auto; flex:1;">
               <div class="row between" style="padding:10px; border-bottom:1px solid var(--border);">
-                <input class="input input-sm" style="width:220px;" value="Search tables..." />
                 <div class="row gap8">
-                  <button class="btn btn-outline btn-sm">Schema: All</button>
-                  <button class="btn btn-outline btn-sm">Only selected</button>
-                  <button class="btn btn-outline btn-sm">Select all</button>
+                  <input
+                    id="scope-select-schema-search"
+                    class="input input-sm"
+                    style="width:180px;"
+                    placeholder="Search schema..."
+                    oninput="filterScopeSelectRows()"
+                  />
+                  <input
+                    id="scope-select-table-search"
+                    class="input input-sm"
+                    style="width:220px;"
+                    placeholder="Search tables..."
+                    oninput="filterScopeSelectRows()"
+                  />
+                </div>
+                <div class="row gap8">
+                  <button class="btn btn-primary btn-sm" onclick="addVisibleToScopeSelection()">Add to selection</button>
+                  <button class="btn btn-outline btn-sm" onclick="clearScopeFilters()">Clear filters</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--destructive);" onclick="resetScopeSelection()">Reset selection</button>
                 </div>
               </div>
-              <div class="scope-table-head">
-                <span></span><span>Name</span><span>Schema</span><span>Rows</span><span>7d Δ/day</span>
+              <div class="scope-select-head">
+                <span></span>
+                <span>
+                  <button class="scope-sort-btn" onclick="sortScopeSelectRows('schema')">
+                    Schema
+                    <span class="scope-sort-arrow" id="scope-sort-schema">↕</span>
+                  </button>
+                </span>
+                <span>
+                  <button class="scope-sort-btn" onclick="sortScopeSelectRows('table')">
+                    Table
+                    <span class="scope-sort-arrow" id="scope-sort-table">↕</span>
+                  </button>
+                </span>
+                <span>Rows</span>
+                <span>7d Δ/day</span>
               </div>
-              <details class="scope-schema-block" open>
-                <summary class="scope-schema-summary">
-                  <span class="scope-schema-title"><span class="scope-disclosure">▸</span>dbo</span>
-                  <span class="text-xs">Select all (12)</span>
-                </summary>
-                <div class="scope-table-row">
-                  <input type="checkbox" checked />
-                  <span class="font-mono">fact_sales</span>
+              <div id="scope-select-table-body">
+                <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="fact_sales">
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
                   <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono">fact_sales</span>
                   <span class="font-mono text-muted">12.4M</span>
                   <span class="font-mono text-muted">+182K</span>
                 </div>
-                <div class="scope-table-row">
-                  <input type="checkbox" checked />
-                  <span class="font-mono">dim_customer</span>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="agg_sales_daily">
+                  <input type="checkbox" onchange="updateScopeSelectCount()" />
                   <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono">agg_sales_daily</span>
+                  <span class="font-mono text-muted">2.8M</span>
+                  <span class="font-mono text-muted">+35K</span>
+                </div>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="dim_customer">
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono">dim_customer</span>
                   <span class="font-mono text-muted">1.1M</span>
                   <span class="font-mono text-muted">+2.1K</span>
                 </div>
-                <div class="scope-table-row">
-                  <input type="checkbox" />
-                  <span class="font-mono">dim_product</span>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="dbo" data-table="dim_product">
+                  <input type="checkbox" onchange="updateScopeSelectCount()" />
                   <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono">dim_product</span>
                   <span class="font-mono text-muted">85K</span>
                   <span class="font-mono text-muted">+90</span>
                 </div>
-              </details>
-              <details class="scope-schema-block" open>
-                <summary class="scope-schema-summary">
-                  <span class="scope-schema-title"><span class="scope-disclosure">▸</span>reporting</span>
-                  <span class="text-xs">Select all (4)</span>
-                </summary>
-                <div class="scope-table-row">
-                  <input type="checkbox" checked />
-                  <span class="font-mono">gold_summary</span>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="gold_summary">
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
                   <span class="font-mono text-muted">reporting</span>
+                  <span class="font-mono">gold_summary</span>
                   <span class="font-mono text-muted">420K</span>
                   <span class="font-mono text-muted">+6.2K</span>
                 </div>
-              </details>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="avg_order_value">
+                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <span class="font-mono text-muted">reporting</span>
+                  <span class="font-mono">avg_order_value</span>
+                  <span class="font-mono text-muted">140K</span>
+                  <span class="font-mono text-muted">+1.4K</span>
+                </div>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="reporting" data-table="gold_sales_rollup">
+                  <input type="checkbox" checked onchange="updateScopeSelectCount()" />
+                  <span class="font-mono text-muted">reporting</span>
+                  <span class="font-mono">gold_sales_rollup</span>
+                  <span class="font-mono text-muted">810K</span>
+                  <span class="font-mono text-muted">+9.8K</span>
+                </div>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="staging" data-table="stg_orders">
+                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <span class="font-mono text-muted">staging</span>
+                  <span class="font-mono">stg_orders</span>
+                  <span class="font-mono text-muted">5.3M</span>
+                  <span class="font-mono text-muted">+61K</span>
+                </div>
+                <div class="scope-select-row scope-select-filterable-row" data-schema="staging" data-table="all_orders_delta">
+                  <input type="checkbox" onchange="updateScopeSelectCount()" />
+                  <span class="font-mono text-muted">staging</span>
+                  <span class="font-mono">all_orders_delta</span>
+                  <span class="font-mono text-muted">3.7M</span>
+                  <span class="font-mono text-muted">+48K</span>
+                </div>
+              </div>
             </div>
           </div>
         </div><!-- /surface-scope-select -->
@@ -1655,6 +1743,95 @@
   </style>
 
   <script>
+    var scopeSort = { key: null, direction: 'asc' };
+
+    function getScopeSelectRows() {
+      return Array.from(document.querySelectorAll('#scope-select-table-body .scope-select-filterable-row'));
+    }
+
+    function updateScopeSelectCount() {
+      var selected = getScopeSelectRows().filter(function (row) {
+        var cb = row.querySelector('input[type="checkbox"]');
+        return cb && cb.checked;
+      }).length;
+      var chip = document.getElementById('scope-select-count-chip');
+      if (chip) chip.textContent = selected + ' tables selected';
+    }
+
+    function filterScopeSelectRows() {
+      var schemaSearch = (document.getElementById('scope-select-schema-search')?.value || '').trim().toLowerCase();
+      var tableSearch = (document.getElementById('scope-select-table-search')?.value || '').trim().toLowerCase();
+
+      getScopeSelectRows().forEach(function (row) {
+        var schema = (row.dataset.schema || '').toLowerCase();
+        var table = (row.dataset.table || '').toLowerCase();
+        var matchesSchema = !schemaSearch || schema.indexOf(schemaSearch) >= 0;
+        var matchesTable = !tableSearch || table.indexOf(tableSearch) >= 0;
+        row.style.display = (matchesSchema && matchesTable) ? '' : 'none';
+      });
+    }
+
+    function addVisibleToScopeSelection() {
+      getScopeSelectRows().forEach(function (row) {
+        if (row.style.display === 'none') return;
+        var cb = row.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = true;
+      });
+      updateScopeSelectCount();
+    }
+
+    function clearScopeFilters() {
+      var schemaInput = document.getElementById('scope-select-schema-search');
+      var tableInput = document.getElementById('scope-select-table-search');
+      if (schemaInput) schemaInput.value = '';
+      if (tableInput) tableInput.value = '';
+      filterScopeSelectRows();
+    }
+
+    function resetScopeSelection() {
+      getScopeSelectRows().forEach(function (row) {
+        var cb = row.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      });
+      updateScopeSelectCount();
+      filterScopeSelectRows();
+    }
+
+    function refreshScopeSchema() {
+      var meta = document.getElementById('scope-select-meta-text');
+      if (meta) meta.textContent = 'Schema refreshed just now';
+    }
+
+    function sortScopeSelectRows(key) {
+      if (scopeSort.key === key) {
+        scopeSort.direction = scopeSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        scopeSort.key = key;
+        scopeSort.direction = 'asc';
+      }
+
+      var schemaArrow = document.getElementById('scope-sort-schema');
+      var tableArrow = document.getElementById('scope-sort-table');
+      if (schemaArrow) schemaArrow.textContent = scopeSort.key === 'schema' ? (scopeSort.direction === 'asc' ? '↑' : '↓') : '↕';
+      if (tableArrow) tableArrow.textContent = scopeSort.key === 'table' ? (scopeSort.direction === 'asc' ? '↑' : '↓') : '↕';
+
+      var body = document.getElementById('scope-select-table-body');
+      if (!body) return;
+      var rows = getScopeSelectRows();
+      var dir = scopeSort.direction === 'asc' ? 1 : -1;
+
+      rows.sort(function (a, b) {
+        var av = (a.dataset[key] || '').toLowerCase();
+        var bv = (b.dataset[key] || '').toLowerCase();
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      });
+
+      rows.forEach(function (row) { body.appendChild(row); });
+      filterScopeSelectRows();
+    }
+
     function show(name, btn, navName) {
       document.querySelectorAll('.surface').forEach(s => s.classList.remove('active'));
       document.getElementById('surface-' + name).classList.add('active');
@@ -1690,6 +1867,9 @@
       document.getElementById('theme-light').classList.toggle('on', theme === 'light');
       document.getElementById('theme-dark').classList.toggle('on', theme === 'dark');
     }
+
+    updateScopeSelectCount();
+    filterScopeSelectRows();
 
   </script>
 
