@@ -437,8 +437,16 @@ mod tests {
         assert_index_exists(&conn, "ix_namespaces_container_id", "namespaces");
         assert_index_exists(&conn, "ux_data_objects_natural", "data_objects");
         assert_index_exists(&conn, "ix_data_objects_namespace_id", "data_objects");
-        assert_index_exists(&conn, "ux_orchestration_items_external", "orchestration_items");
-        assert_index_exists(&conn, "ix_orchestration_items_source_id", "orchestration_items");
+        assert_index_exists(
+            &conn,
+            "ux_orchestration_items_external",
+            "orchestration_items",
+        );
+        assert_index_exists(
+            &conn,
+            "ix_orchestration_items_source_id",
+            "orchestration_items",
+        );
         assert_index_exists(
             &conn,
             "ux_orchestration_activities_natural",
@@ -466,13 +474,7 @@ mod tests {
         assert_fk_delete_cascade(&conn, "containers", "source_id", "sources", "id");
         assert_fk_delete_cascade(&conn, "namespaces", "container_id", "containers", "id");
         assert_fk_delete_cascade(&conn, "data_objects", "namespace_id", "namespaces", "id");
-        assert_fk_delete_cascade(
-            &conn,
-            "orchestration_items",
-            "source_id",
-            "sources",
-            "id",
-        );
+        assert_fk_delete_cascade(&conn, "orchestration_items", "source_id", "sources", "id");
         assert_fk_delete_cascade(
             &conn,
             "orchestration_activities",
@@ -504,7 +506,13 @@ mod tests {
             "sqlserver_procedure_runtime_stats",
             "sqlserver_table_ddl_snapshots",
         ] {
-            assert_fk_delete_cascade(&conn, extension_table, "data_object_id", "data_objects", "id");
+            assert_fk_delete_cascade(
+                &conn,
+                extension_table,
+                "data_object_id",
+                "data_objects",
+                "id",
+            );
         }
         assert_fk_delete_cascade(
             &conn,
