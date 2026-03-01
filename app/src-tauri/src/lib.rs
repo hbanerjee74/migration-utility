@@ -2,6 +2,7 @@ mod agent_sources;
 mod commands;
 mod db;
 mod logging;
+mod source_sql;
 mod types;
 
 use std::sync::Mutex;
