@@ -8,7 +8,16 @@
 
 const mockResponses: Record<string, unknown> = {
   // Workspace
-  workspace_apply_and_clone: undefined,
+  workspace_apply_start: "job-1",
+  workspace_apply_status: {
+    jobId: "job-1",
+    state: "succeeded",
+    isAlive: false,
+    stage: "completed",
+    percent: 100,
+    message: "Apply completed.",
+    error: null,
+  },
   workspace_cancel_apply: undefined,
   workspace_test_source_connection: "Connection successful",
   workspace_discover_source_databases: ["master"],

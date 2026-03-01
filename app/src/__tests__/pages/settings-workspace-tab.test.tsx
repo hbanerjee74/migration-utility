@@ -1,28 +1,10 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import WorkspaceTab from '../../routes/settings/workspace-tab';
-import { makeWorkspace } from '../../test/fixtures';
 import { mockInvoke, mockInvokeCommands, resetTauriMocks } from '../../test/mocks/tauri';
 import { useWorkflowStore } from '../../stores/workflow-store';
-
-type ApplyProgressPayload = {
-  stage: string;
-  percent: number;
-  message: string;
-};
-
-let applyProgressListener: ((event: { payload: ApplyProgressPayload }) => void) | null = null;
-
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn((_name: string, handler: (event: { payload: ApplyProgressPayload }) => void) => {
-    applyProgressListener = handler;
-    return Promise.resolve(() => {
-      applyProgressListener = null;
-    });
-  }),
-}));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn().mockResolvedValue('/selected/path'),
@@ -39,11 +21,19 @@ function renderPage() {
 describe('WorkspaceTab (Settings)', () => {
   beforeEach(() => {
     resetTauriMocks();
-    applyProgressListener = null;
     mockInvokeCommands({
       workspace_get: null,
       github_list_repos: [],
-      workspace_apply_and_clone: makeWorkspace(),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks', 'master'],
@@ -100,7 +90,16 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     mockInvokeCommands({
       workspace_get: null,
-      workspace_apply_and_clone: makeWorkspace(),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
@@ -203,7 +202,16 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     mockInvokeCommands({
       workspace_get: null,
-      workspace_apply_and_clone: makeWorkspace({ migrationRepoName: 'acme/data-platform' }),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
@@ -241,7 +249,16 @@ describe('WorkspaceTab (Settings)', () => {
     const user = userEvent.setup();
     mockInvokeCommands({
       workspace_get: null,
-      workspace_apply_and_clone: makeWorkspace({ migrationRepoName: 'acme/data-platform' }),
+      workspace_apply_start: 'job-1',
+      workspace_apply_status: {
+        jobId: 'job-1',
+        state: 'succeeded',
+        isAlive: false,
+        stage: 'completed',
+        percent: 100,
+        message: 'Apply completed.',
+        error: null,
+      },
       workspace_cancel_apply: undefined,
       workspace_test_source_connection: 'Connection successful',
       workspace_discover_source_databases: ['AdventureWorks'],
@@ -265,7 +282,7 @@ describe('WorkspaceTab (Settings)', () => {
     await user.click(screen.getByTestId('btn-apply'));
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('workspace_apply_and_clone', {
+      expect(mockInvoke).toHaveBeenCalledWith('workspace_apply_start', {
         args: {
           name: 'Migration Workspace',
           migrationRepoName: 'acme/data-platform',
@@ -289,11 +306,7 @@ describe('WorkspaceTab (Settings)', () => {
 
   it('shows apply progress and allows cancel while apply is running', async () => {
     const user = userEvent.setup();
-    const applyWorkspace = makeWorkspace({ migrationRepoName: 'acme/data-platform' });
-    let resolveApply!: (value: typeof applyWorkspace) => void;
-    const applyPromise = new Promise<typeof applyWorkspace>((resolve) => {
-      resolveApply = resolve;
-    });
+    let statusPollCount = 0;
 
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === 'workspace_get') return Promise.resolve(null);
@@ -301,7 +314,19 @@ describe('WorkspaceTab (Settings)', () => {
         return Promise.resolve([{ id: 1, fullName: 'acme/data-platform', private: true }]);
       if (cmd === 'workspace_test_source_connection') return Promise.resolve('Connection successful');
       if (cmd === 'workspace_discover_source_databases') return Promise.resolve(['AdventureWorks']);
-      if (cmd === 'workspace_apply_and_clone') return applyPromise;
+      if (cmd === 'workspace_apply_start') return Promise.resolve('job-1');
+      if (cmd === 'workspace_apply_status') {
+        statusPollCount += 1;
+        return Promise.resolve({
+          jobId: 'job-1',
+          state: statusPollCount < 4 ? 'running' : 'cancelled',
+          isAlive: statusPollCount < 4,
+          stage: 'importing_tables',
+          percent: 65,
+          message: statusPollCount < 4 ? 'Importing source tables...' : 'Apply cancelled.',
+          error: statusPollCount < 4 ? null : 'Apply cancelled by user',
+        });
+      }
       if (cmd === 'workspace_cancel_apply') return Promise.resolve(undefined);
       if (cmd === 'workspace_reset_state') return Promise.resolve(undefined);
       return Promise.reject(new Error(`Unmocked command: ${cmd}`));
@@ -321,16 +346,6 @@ describe('WorkspaceTab (Settings)', () => {
 
     await user.click(screen.getByTestId('btn-apply'));
 
-    await act(async () => {
-      applyProgressListener?.({
-        payload: {
-          stage: 'importing_tables',
-          percent: 65,
-          message: 'Importing source tables...',
-        },
-      });
-    });
-
     await waitFor(() => {
       expect(screen.getByTestId('workspace-apply-progress')).toHaveTextContent(
         'Importing source tables...',
@@ -341,10 +356,6 @@ describe('WorkspaceTab (Settings)', () => {
     await user.click(screen.getByTestId('btn-cancel-apply'));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('workspace_cancel_apply');
-    });
-
-    await act(async () => {
-      resolveApply(applyWorkspace);
     });
   });
 

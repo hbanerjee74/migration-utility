@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { Lock } from 'lucide-react';
 import { useWorkflowStore } from '@/stores/workflow-store';
@@ -12,13 +11,14 @@ import SettingsPanelShell from '@/components/settings/settings-panel-shell';
 import {
   workspaceDiscoverSourceDatabases,
   githubListRepos,
-  workspaceApplyAndClone,
+  workspaceApplyStart,
+  workspaceApplyStatus,
   workspaceCancelApply,
   workspaceGet,
   workspaceResetState,
   workspaceTestSourceConnection,
 } from '@/lib/tauri';
-import type { GitHubRepo, WorkspaceApplyProgressEvent } from '@/lib/types';
+import type { GitHubRepo } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
 const DEFAULT_WORKSPACE_NAME = 'Migration Workspace';
@@ -105,6 +105,8 @@ export default function WorkspaceTab() {
   const [resetError, setResetError] = useState<string | null>(null);
   const cancelApplyRef = useRef(false);
   const progressTimerRef = useRef<number | null>(null);
+  const applyJobIdRef = useRef<string | null>(null);
+  const applyPollerRef = useRef<number | null>(null);
 
   const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -144,26 +146,16 @@ export default function WorkspaceTab() {
   const pageLocked = isLocked || isConfigured;
 
   useEffect(() => {
-    if (!applying) return;
-    let unlisten: (() => void) | null = null;
-    void listen<WorkspaceApplyProgressEvent>('workspace-apply-progress', (event) => {
-      setApplyProgressMessage(event.payload.message);
-      setApplyProgressPercent(event.payload.percent);
-    }).then((fn) => {
-      unlisten = fn;
-    });
-
-    return () => {
-      unlisten?.();
-    };
-  }, [applying]);
-
-  useEffect(() => {
     if (!applying) {
       if (progressTimerRef.current !== null) {
         window.clearInterval(progressTimerRef.current);
         progressTimerRef.current = null;
       }
+      if (applyPollerRef.current !== null) {
+        window.clearInterval(applyPollerRef.current);
+        applyPollerRef.current = null;
+      }
+      applyJobIdRef.current = null;
       return;
     }
 
@@ -180,6 +172,10 @@ export default function WorkspaceTab() {
       if (progressTimerRef.current !== null) {
         window.clearInterval(progressTimerRef.current);
         progressTimerRef.current = null;
+      }
+      if (applyPollerRef.current !== null) {
+        window.clearInterval(applyPollerRef.current);
+        applyPollerRef.current = null;
       }
     };
   }, [applying]);
@@ -324,8 +320,14 @@ export default function WorkspaceTab() {
     setApplySuccessMessage(null);
     setApplyProgressMessage('Validating source access...');
     setApplyProgressPercent(8);
+
+    // Ensure the progress UI paints before the apply job starts.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
     try {
-      const ws = await workspaceApplyAndClone({
+      const jobId = await workspaceApplyStart({
         name: workspaceName.trim() || DEFAULT_WORKSPACE_NAME,
         migrationRepoName: repoName.trim(),
         migrationRepoPath: repoPath.trim(),
@@ -342,13 +344,52 @@ export default function WorkspaceTab() {
         sourceEncrypt,
         sourceTrustServerCertificate,
       });
-      setWorkspaceId(ws.id);
-      setWorkspaceName(ws.displayName);
-      setIsConfigured(true);
-      setApplySuccessMessage('Workspace applied successfully. Repository cloned locally.');
-      setApplyProgressMessage(null);
-      setApplyProgressPercent(100);
-      logger.info('workspace: applied and repo cloned');
+      applyJobIdRef.current = jobId;
+
+      const pollStatus = async () => {
+        if (!applyJobIdRef.current) return;
+        const status = await workspaceApplyStatus(applyJobIdRef.current);
+        if (status.message) setApplyProgressMessage(status.message);
+        setApplyProgressPercent(status.percent);
+
+        if (status.state === 'running') return;
+
+        if (applyPollerRef.current !== null) {
+          window.clearInterval(applyPollerRef.current);
+          applyPollerRef.current = null;
+        }
+
+        if (status.state === 'succeeded') {
+          const ws = await workspaceGet();
+          if (ws) {
+            setWorkspaceId(ws.id);
+            setWorkspaceName(ws.displayName);
+          }
+          setIsConfigured(true);
+          setApplySuccessMessage('Workspace applied successfully. Repository cloned locally.');
+          setApplyProgressMessage(null);
+          setApplyProgressPercent(100);
+          logger.info('workspace: applied and repo cloned');
+          setApplying(false);
+          return;
+        }
+
+        if (status.state === 'cancelled') {
+          logger.info('workspace apply cancelled by user');
+          setApplyError('Apply cancelled. No source settings were committed.');
+        } else {
+          logger.error('workspace apply failed');
+          setApplyError(status.error ?? 'Apply failed');
+        }
+        setApplyProgressMessage(null);
+        setApplyProgressPercent(0);
+        setApplying(false);
+      };
+
+      await pollStatus();
+      applyPollerRef.current = window.setInterval(() => {
+        void pollStatus();
+      }, 600);
     } catch (err) {
       const message = getErrorMessage(err);
       if (cancelApplyRef.current || message.toLowerCase().includes('cancelled')) {
@@ -360,8 +401,8 @@ export default function WorkspaceTab() {
       }
       setApplyProgressMessage(null);
       setApplyProgressPercent(0);
-    } finally {
       setApplying(false);
+    } finally {
       cancelApplyRef.current = false;
     }
   }

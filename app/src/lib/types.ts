@@ -70,6 +70,16 @@ export interface WorkspaceApplyProgressEvent {
   message: string;
 }
 
+export interface WorkspaceApplyJobStatus {
+  jobId: string;
+  state: 'running' | 'succeeded' | 'failed' | 'cancelled';
+  isAlive: boolean;
+  stage: string | null;
+  percent: number;
+  message: string | null;
+  error: string | null;
+}
+
 export interface AppSettings {
   anthropicApiKey: string | null;
   githubOauthToken: string | null;

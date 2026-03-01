@@ -1,7 +1,11 @@
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock, Mutex,
+    },
 };
 
 use chrono::Utc;
@@ -19,6 +23,9 @@ use crate::source_sql::{resolve_source_query, should_log_source_sql, SourceQuery
 use crate::types::{CommandError, WarehouseProcedure, WarehouseSchema, WarehouseTable, Workspace};
 
 static WORKSPACE_APPLY_CANCELLED: AtomicBool = AtomicBool::new(false);
+static WORKSPACE_APPLY_RUNNING: AtomicBool = AtomicBool::new(false);
+static WORKSPACE_APPLY_JOBS: LazyLock<Mutex<HashMap<String, WorkspaceApplyJobStatus>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -259,6 +266,18 @@ struct WorkspaceApplyProgressEvent {
     message: String,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceApplyJobStatus {
+    pub job_id: String,
+    pub state: String,
+    pub is_alive: bool,
+    pub stage: Option<String>,
+    pub percent: u8,
+    pub message: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone)]
 struct SourceConnectionConfig {
     source_type: String,
@@ -279,14 +298,17 @@ struct SqlServerInventory {
 
 fn emit_apply_progress(
     app: &AppHandle,
+    job_id: &str,
     stage: &'static str,
     percent: u8,
     message: impl Into<String>,
 ) {
+    let message = message.into();
+    set_job_status(job_id, "running", Some(stage), percent, Some(message.clone()), None);
     let payload = WorkspaceApplyProgressEvent {
         stage,
         percent,
-        message: message.into(),
+        message,
     };
     if let Err(e) = app.emit("workspace-apply-progress", payload) {
         log::warn!("workspace_apply_and_clone: failed to emit progress event: {e}");
@@ -298,6 +320,29 @@ fn check_apply_cancelled() -> Result<(), CommandError> {
         return Err(CommandError::Io("Apply cancelled by user".to_string()));
     }
     Ok(())
+}
+
+fn set_job_status(
+    job_id: &str,
+    state: &str,
+    stage: Option<&str>,
+    percent: u8,
+    message: Option<String>,
+    error: Option<String>,
+) {
+    let mut jobs = WORKSPACE_APPLY_JOBS.lock().unwrap();
+    jobs.insert(
+        job_id.to_string(),
+        WorkspaceApplyJobStatus {
+            job_id: job_id.to_string(),
+            state: state.to_string(),
+            is_alive: state == "running",
+            stage: stage.map(|s| s.to_string()),
+            percent,
+            message,
+            error,
+        },
+    );
 }
 
 fn require_sql_server_source(
@@ -376,6 +421,7 @@ fn build_tiberius_config(cfg: &SourceConnectionConfig) -> Config {
 fn fetch_sql_server_inventory(
     cfg: &SourceConnectionConfig,
     app: &AppHandle,
+    job_id: &str,
 ) -> Result<SqlServerInventory, CommandError> {
     let runtime = RuntimeBuilder::new_current_thread()
         .enable_io()
@@ -403,7 +449,13 @@ fn fetch_sql_server_inventory(
             })?;
 
         check_apply_cancelled()?;
-        emit_apply_progress(app, "importing_schemas", 50, "Importing source schemas...");
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_schemas",
+            50,
+            "Importing source schemas...",
+        );
         let schemas_query = resolve_source_query(&cfg.source_type, SourceQuery::DiscoverSchemas)?;
         if should_log_source_sql() {
             log::debug!(
@@ -444,7 +496,13 @@ fn fetch_sql_server_inventory(
         }
 
         check_apply_cancelled()?;
-        emit_apply_progress(app, "importing_tables", 65, "Importing source tables...");
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_tables",
+            65,
+            "Importing source tables...",
+        );
         let tables_query = resolve_source_query(&cfg.source_type, SourceQuery::DiscoverTables)?;
         if should_log_source_sql() {
             log::debug!(
@@ -494,6 +552,7 @@ fn fetch_sql_server_inventory(
         check_apply_cancelled()?;
         emit_apply_progress(
             app,
+            job_id,
             "importing_procedures",
             80,
             "Importing source procedures...",
@@ -696,6 +755,8 @@ fn persist_sql_server_inventory(
     workspace_id: &str,
     source_database: &str,
     inventory: SqlServerInventory,
+    app: Option<&AppHandle>,
+    job_id: Option<&str>,
 ) -> Result<(), CommandError> {
     let tx = conn.unchecked_transaction().map_err(|e| {
         log::error!("workspace_apply_and_clone: failed to begin inventory transaction: {e}");
@@ -744,6 +805,9 @@ fn persist_sql_server_inventory(
         CommandError::from(e)
     })?;
 
+    let total_objects = inventory.schemas.len() + inventory.tables.len() + inventory.procedures.len();
+    let mut imported_objects = 0usize;
+
     for mut schema in inventory.schemas {
         check_apply_cancelled()?;
         schema.warehouse_item_id = source_item_id.clone();
@@ -756,6 +820,8 @@ fn persist_sql_server_inventory(
             log::error!("workspace_apply_and_clone: failed to upsert schema: {e}");
             CommandError::from(e)
         })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
     }
     for mut table in inventory.tables {
         check_apply_cancelled()?;
@@ -774,6 +840,8 @@ fn persist_sql_server_inventory(
             log::error!("workspace_apply_and_clone: failed to upsert table: {e}");
             CommandError::from(e)
         })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
     }
     for mut procedure in inventory.procedures {
         check_apply_cancelled()?;
@@ -793,6 +861,8 @@ fn persist_sql_server_inventory(
             log::error!("workspace_apply_and_clone: failed to upsert procedure: {e}");
             CommandError::from(e)
         })?;
+        imported_objects += 1;
+        maybe_emit_object_import_progress(app, job_id, imported_objects, total_objects);
     }
 
     tx.commit().map_err(|e| {
@@ -800,6 +870,42 @@ fn persist_sql_server_inventory(
         CommandError::from(e)
     })?;
     Ok(())
+}
+
+fn maybe_emit_object_import_progress(
+    app: Option<&AppHandle>,
+    job_id: Option<&str>,
+    imported_objects: usize,
+    total_objects: usize,
+) {
+    let Some(app) = app else {
+        return;
+    };
+    let Some(job_id) = job_id else {
+        return;
+    };
+    if total_objects == 0 {
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_source_metadata",
+            99,
+            "Importing source metadata... 0/0",
+        );
+        return;
+    }
+
+    if imported_objects == 1 || imported_objects == total_objects || imported_objects % 25 == 0 {
+        let ratio = imported_objects as f64 / total_objects as f64;
+        let percent = (95.0 + (ratio * 4.0)).round() as u8;
+        emit_apply_progress(
+            app,
+            job_id,
+            "importing_source_metadata",
+            percent.min(99),
+            format!("Importing source metadata... {imported_objects}/{total_objects}"),
+        );
+    }
 }
 
 #[tauri::command]
@@ -881,6 +987,16 @@ pub fn workspace_apply_and_clone(
     state: State<DbState>,
     app: AppHandle,
 ) -> Result<Workspace, CommandError> {
+    let conn = state.0.lock().unwrap();
+    run_workspace_apply_with_conn(args, &conn, &app, "direct-apply")
+}
+
+fn run_workspace_apply_with_conn(
+    args: ApplyWorkspaceArgs,
+    conn: &Connection,
+    app: &AppHandle,
+    job_id: &str,
+) -> Result<Workspace, CommandError> {
     log::info!(
         "workspace_apply_and_clone: name={} repo={}",
         args.name,
@@ -909,24 +1025,25 @@ pub fn workspace_apply_and_clone(
     WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
 
     let token = {
-        let conn = state.0.lock().unwrap();
-        let settings = crate::db::read_settings(&conn).map_err(CommandError::Io)?;
+        let settings = crate::db::read_settings(conn).map_err(CommandError::Io)?;
         settings
             .github_oauth_token
             .ok_or_else(|| CommandError::Io("GitHub is not connected".to_string()))?
     };
 
     emit_apply_progress(
-        &app,
+        app,
+        job_id,
         "validating_source_access",
         15,
         "Validating source connectivity and access...",
     );
-    let inventory = fetch_sql_server_inventory(&source_cfg, &app)?;
+    let inventory = fetch_sql_server_inventory(&source_cfg, app, job_id)?;
     check_apply_cancelled()?;
 
     emit_apply_progress(
-        &app,
+        app,
+        job_id,
         "verifying_repo",
         35,
         "Verifying migration repository...",
@@ -938,30 +1055,118 @@ pub fn workspace_apply_and_clone(
     check_apply_cancelled()?;
 
     emit_apply_progress(
-        &app,
+        app,
+        job_id,
         "persisting_workspace",
         90,
         "Persisting source settings...",
     );
-    let conn = state.0.lock().unwrap();
-    let workspace = upsert_workspace(&conn, &args, &repo_name, &repo_path)?;
+    let workspace = upsert_workspace(conn, &args, &repo_name, &repo_path)?;
     check_apply_cancelled()?;
     emit_apply_progress(
-        &app,
+        app,
+        job_id,
         "importing_source_metadata",
         95,
         "Writing source metadata to local workspace...",
     );
     persist_sql_server_inventory(
-        &conn,
+        conn,
         &workspace.id,
         source_cfg.source_database.as_str(),
         inventory,
+        Some(app),
+        Some(job_id),
     )?;
 
-    emit_apply_progress(&app, "completed", 100, "Apply completed.");
+    emit_apply_progress(app, job_id, "completed", 100, "Apply completed.");
     WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
     Ok(workspace)
+}
+
+#[tauri::command]
+pub fn workspace_apply_start(args: ApplyWorkspaceArgs, app: AppHandle) -> Result<String, CommandError> {
+    if WORKSPACE_APPLY_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(CommandError::Io(
+            "An apply operation is already running".to_string(),
+        ));
+    }
+
+    WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
+    let job_id = Uuid::new_v4().to_string();
+    set_job_status(
+        &job_id,
+        "running",
+        Some("starting"),
+        5,
+        Some("Starting apply...".to_string()),
+        None,
+    );
+
+    let app_handle = app.clone();
+    let job_id_for_thread = job_id.clone();
+    std::thread::spawn(move || {
+        let result = (|| -> Result<(), CommandError> {
+            use tauri::Manager;
+            let db_path = app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| CommandError::Io(e.to_string()))?
+                .join("migration-utility.db");
+            let conn = crate::db::open(&db_path).map_err(|e| CommandError::Io(e.to_string()))?;
+            let _workspace =
+                run_workspace_apply_with_conn(args, &conn, &app_handle, &job_id_for_thread)?;
+            Ok(())
+        })();
+
+        match result {
+            Ok(_) => set_job_status(
+                &job_id_for_thread,
+                "succeeded",
+                Some("completed"),
+                100,
+                Some("Apply completed.".to_string()),
+                None,
+            ),
+            Err(e) => {
+                let message = e.to_string();
+                if message.to_ascii_lowercase().contains("cancelled") {
+                    set_job_status(
+                        &job_id_for_thread,
+                        "cancelled",
+                        Some("cancelled"),
+                        0,
+                        Some("Apply cancelled.".to_string()),
+                        Some(message),
+                    );
+                } else {
+                    set_job_status(
+                        &job_id_for_thread,
+                        "failed",
+                        Some("failed"),
+                        0,
+                        Some("Apply failed.".to_string()),
+                        Some(message),
+                    );
+                }
+            }
+        }
+        WORKSPACE_APPLY_RUNNING.store(false, Ordering::SeqCst);
+        WORKSPACE_APPLY_CANCELLED.store(false, Ordering::SeqCst);
+    });
+
+    Ok(job_id)
+}
+
+#[tauri::command]
+pub fn workspace_apply_status(job_id: String) -> Result<WorkspaceApplyJobStatus, CommandError> {
+    let jobs = WORKSPACE_APPLY_JOBS.lock().unwrap();
+    jobs.get(&job_id)
+        .cloned()
+        .ok_or_else(|| CommandError::NotFound(format!("Apply job not found: {job_id}")))
 }
 
 #[tauri::command]
@@ -1620,7 +1825,7 @@ mod tests {
                 sql_body: Some("SELECT 1".to_string()),
             }],
         };
-        persist_sql_server_inventory(&conn, "ws-1", "AdventureWorks", first).unwrap();
+        persist_sql_server_inventory(&conn, "ws-1", "AdventureWorks", first, None, None).unwrap();
 
         let second = SqlServerInventory {
             schemas: vec![WarehouseSchema {
@@ -1631,7 +1836,7 @@ mod tests {
             tables: vec![],
             procedures: vec![],
         };
-        persist_sql_server_inventory(&conn, "ws-1", "AdventureWorks", second).unwrap();
+        persist_sql_server_inventory(&conn, "ws-1", "AdventureWorks", second, None, None).unwrap();
 
         let schema_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM warehouse_schemas", [], |row| {
@@ -1902,6 +2107,8 @@ mod tests {
                 tables,
                 procedures,
             },
+            None,
+            None,
         )
         .unwrap();
 

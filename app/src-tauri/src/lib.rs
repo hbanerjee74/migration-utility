@@ -46,6 +46,8 @@ pub fn run() {
             commands::settings::test_api_key,
             commands::workspace::workspace_create,
             commands::workspace::workspace_apply_and_clone,
+            commands::workspace::workspace_apply_start,
+            commands::workspace::workspace_apply_status,
             commands::workspace::workspace_cancel_apply,
             commands::workspace::workspace_get,
             commands::workspace::workspace_test_source_connection,
