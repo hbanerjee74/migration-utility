@@ -403,8 +403,9 @@ fn fetch_sql_server_inventory(
         let mut client = Client::connect(config, tcp.compat_write())
             .await
             .map_err(|e| {
-                log::error!("workspace_apply_and_clone: failed to authenticate: {e}");
-                CommandError::Io(format!("Connection test failed: {e}"))
+                let _ = e;
+                log::error!("workspace_apply_and_clone: failed to authenticate");
+                CommandError::Io("Connection test failed".to_string())
             })?;
 
         let container_id_query =
@@ -1420,8 +1421,9 @@ pub fn workspace_test_source_connection(
         let _client = Client::connect(config, tcp.compat_write())
             .await
             .map_err(|e| {
-                log::error!("workspace_test_source_connection: failed to authenticate: {e}");
-                CommandError::Io(format!("Connection test failed: {e}"))
+                let _ = e;
+                log::error!("workspace_test_source_connection: failed to authenticate");
+                CommandError::Io("Connection test failed".to_string())
             })?;
 
         Ok::<(), CommandError>(())
@@ -1503,8 +1505,9 @@ pub fn workspace_discover_source_databases(
         let mut client = Client::connect(config, tcp.compat_write())
             .await
             .map_err(|e| {
-                log::error!("workspace_discover_source_databases: failed to authenticate: {e}");
-                CommandError::Io(format!("Database discovery failed: {e}"))
+                let _ = e;
+                log::error!("workspace_discover_source_databases: failed to authenticate");
+                CommandError::Io("Database discovery failed".to_string())
             })?;
 
         let query = resolve_source_query(&args.source_type, SourceQuery::DiscoverDatabases)?;
