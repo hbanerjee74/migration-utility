@@ -104,6 +104,7 @@ export default function WorkspaceTab() {
   const [applyProgressPercent, setApplyProgressPercent] = useState<number>(0);
   const [resetError, setResetError] = useState<string | null>(null);
   const cancelApplyRef = useRef(false);
+  const progressTimerRef = useRef<number | null>(null);
 
   const [repoSuggestions, setRepoSuggestions] = useState<GitHubRepo[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -154,6 +155,32 @@ export default function WorkspaceTab() {
 
     return () => {
       unlisten?.();
+    };
+  }, [applying]);
+
+  useEffect(() => {
+    if (!applying) {
+      if (progressTimerRef.current !== null) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (progressTimerRef.current !== null) {
+      window.clearInterval(progressTimerRef.current);
+    }
+    progressTimerRef.current = window.setInterval(() => {
+      // Fallback UI progress in case backend events are delayed/missed.
+      setApplyProgressPercent((prev) => (prev >= 92 ? prev : prev + 2));
+      setApplyProgressMessage((prev) => prev ?? 'Importing source metadata...');
+    }, 700);
+
+    return () => {
+      if (progressTimerRef.current !== null) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
     };
   }, [applying]);
 
@@ -295,8 +322,8 @@ export default function WorkspaceTab() {
     cancelApplyRef.current = false;
     setApplyError(null);
     setApplySuccessMessage(null);
-    setApplyProgressMessage('Starting apply...');
-    setApplyProgressPercent(5);
+    setApplyProgressMessage('Validating source access...');
+    setApplyProgressPercent(8);
     try {
       const ws = await workspaceApplyAndClone({
         name: workspaceName.trim() || DEFAULT_WORKSPACE_NAME,
