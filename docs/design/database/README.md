@@ -151,7 +151,7 @@ Apply initializes or refreshes local source metadata for the selected source:
 - loads/discovers canonical entities
 - writes canonical tables and connector extensions
 - supports progress + cancel
-- is idempotent on re-run
+- runs once per source setup; subsequent metadata refresh is handled in Scope
 
 ### Scope -> Select Tables -> Refresh Schema
 
