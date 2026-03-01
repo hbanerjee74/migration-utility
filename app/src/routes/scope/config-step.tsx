@@ -20,14 +20,21 @@ function toPayload(detail: TableDetailRow): TableConfigPayload {
     selectedTableId: detail.selectedTableId,
     tableType: detail.tableType,
     loadStrategy: detail.loadStrategy,
-    grainColumns: null,
-    relationshipsJson: null,
+    grainColumns: detail.grainColumns,
+    relationshipsJson: detail.relationshipsJson,
     incrementalColumn: detail.incrementalColumn,
     dateColumn: detail.dateColumn,
     snapshotStrategy: detail.snapshotStrategy || 'sample_1day',
     piiColumns: detail.piiColumns,
     confirmedAt: detail.confirmedAt,
   };
+}
+
+function formatRowCount(value: number | null): string {
+  if (value === null || value === undefined) return '--';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return value.toLocaleString();
 }
 
 export default function ConfigStep() {
@@ -120,13 +127,6 @@ export default function ConfigStep() {
     autosaveTimerRef.current = window.setTimeout(() => {
       void persist(next);
     }, 500);
-  }
-
-  async function confirmTable() {
-    if (!draft || isLocked) return;
-    const next = { ...draft, confirmedAt: new Date().toISOString() };
-    setDraft(next);
-    await persist(next);
   }
 
   async function refreshSchema() {
@@ -278,7 +278,7 @@ export default function ConfigStep() {
                       <input type="radio" readOnly checked={row.selectedTableId === activeId} />
                       <span className="font-mono">{row.tableName}</span>
                       <span className="font-mono text-muted-foreground">{row.schemaName}</span>
-                      <span className="font-mono text-muted-foreground">--</span>
+                      <span className="font-mono text-muted-foreground">{formatRowCount(row.rowCount)}</span>
                       <span
                         className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${
                           row.status === 'Ready'
@@ -336,20 +336,7 @@ export default function ConfigStep() {
                   </select>
                 </label>
                 <label className="space-y-1 text-sm">
-                  <span>Snapshot strategy</span>
-                  <select
-                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                    value={draft.snapshotStrategy}
-                    disabled={isLocked}
-                    onChange={(e) => updateDraft('snapshotStrategy', e.target.value)}
-                  >
-                    <option value="sample_1day">sample_1day</option>
-                    <option value="full">full</option>
-                    <option value="full_flagged">full_flagged</option>
-                  </select>
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span>Incremental column</span>
+                  <span>CDC column</span>
                   <Input
                     value={draft.incrementalColumn ?? ''}
                     disabled={isLocked}
@@ -373,30 +360,38 @@ export default function ConfigStep() {
                   />
                 </label>
                 <label className="space-y-1 text-sm">
-                  <span>PK columns</span>
-                  <Input value='["sale_id"]' disabled />
-                </label>
-                <label className="space-y-1 text-sm">
                   <span>Grain columns</span>
-                  <Input value='["sale_id"]' disabled />
+                  <Input
+                    value={draft.grainColumns ?? ''}
+                    disabled={isLocked}
+                    onChange={(e) => updateDraft('grainColumns', e.target.value || null)}
+                  />
                 </label>
                 <label className="space-y-1 text-sm md:col-span-2">
                   <span>Relationships (required for tests)</span>
-                  <Input value='[{"column":"customer_id","ref_table":"dim_customer"}]' disabled />
+                  <Input
+                    value={draft.relationshipsJson ?? ''}
+                    disabled={isLocked}
+                    onChange={(e) => updateDraft('relationshipsJson', e.target.value || null)}
+                  />
                 </label>
                 <label className="space-y-1 text-sm md:col-span-2">
                   <span>SCD (dimensions only)</span>
-                  <Input value="scd_type=none" disabled />
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={draft.snapshotStrategy}
+                    disabled={isLocked || draft.tableType !== 'dimension'}
+                    onChange={(e) => updateDraft('snapshotStrategy', e.target.value)}
+                  >
+                    <option value="sample_1day">sample_1day</option>
+                    <option value="full">full</option>
+                    <option value="full_flagged">full_flagged</option>
+                  </select>
                 </label>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" onClick={() => void confirmTable()} disabled={isLocked || saving}>
-                  {draft.confirmedAt ? 'Confirmed' : 'Confirm table'}
-                </Button>
-                {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
-              </div>
+              {saving && <span className="text-xs text-muted-foreground">Saving...</span>}
             </div>
           )}
         </div>

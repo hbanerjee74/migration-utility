@@ -39,11 +39,14 @@ describe('ConfigStep', () => {
         warehouseItemId: 'wh-1',
         schemaName: 'dbo',
         tableName: 'fact_sales',
+        rowCount: 1_250_000,
         tableType: null,
         loadStrategy: null,
         snapshotStrategy: 'sample_1day',
         incrementalColumn: null,
         dateColumn: null,
+        grainColumns: null,
+        relationshipsJson: null,
         piiColumns: null,
         confirmedAt: null,
         status: 'Missing details',
@@ -103,4 +106,3 @@ describe('ConfigStep', () => {
     });
   });
 });
-

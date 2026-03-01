@@ -287,6 +287,8 @@ pub struct ScopeInventoryRow {
     pub warehouse_item_id: String,
     pub schema_name: String,
     pub table_name: String,
+    pub row_count: Option<i64>,
+    pub delta_per_day: Option<f64>,
     pub is_selected: bool,
 }
 
@@ -297,11 +299,14 @@ pub struct TableDetailRow {
     pub warehouse_item_id: String,
     pub schema_name: String,
     pub table_name: String,
+    pub row_count: Option<i64>,
     pub table_type: Option<String>,
     pub load_strategy: Option<String>,
     pub snapshot_strategy: String,
     pub incremental_column: Option<String>,
     pub date_column: Option<String>,
+    pub grain_columns: Option<String>,
+    pub relationships_json: Option<String>,
     pub pii_columns: Option<String>,
     pub confirmed_at: Option<String>,
     pub status: String,

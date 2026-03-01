@@ -288,6 +288,27 @@ pub fn migration_list_scope_inventory(
     let mut stmt = conn
         .prepare(
             "SELECT wt.warehouse_item_id, wt.schema_name, wt.table_name,
+                    (
+                      SELECT SUM(sp.row_count)
+                      FROM data_objects do
+                      INNER JOIN namespaces ns
+                        ON ns.id = do.namespace_id
+                      INNER JOIN containers c
+                        ON c.id = ns.container_id
+                      INNER JOIN sources s
+                        ON s.id = c.source_id
+                      LEFT JOIN sqlserver_partitions sp
+                        ON sp.data_object_id = do.id
+                      WHERE s.workspace_id = ?1
+                        AND do.object_type = 'table'
+                        AND ns.namespace_name = wt.schema_name
+                        AND do.object_name = wt.table_name
+                        AND (
+                          wt.object_id_local IS NULL
+                          OR do.external_object_id = CAST(wt.object_id_local AS TEXT)
+                        )
+                    ) AS row_count,
+                    NULL AS delta_per_day,
                     EXISTS(
                       SELECT 1 FROM selected_tables st
                       WHERE st.workspace_id = ?1
@@ -309,7 +330,9 @@ pub fn migration_list_scope_inventory(
                 warehouse_item_id: row.get(0)?,
                 schema_name: row.get(1)?,
                 table_name: row.get(2)?,
-                is_selected: row.get::<_, bool>(3)?,
+                row_count: row.get(3)?,
+                delta_per_day: row.get(4)?,
+                is_selected: row.get::<_, bool>(5)?,
             })
         })
         .map_err(CommandError::from)?;
@@ -464,11 +487,29 @@ pub fn migration_list_table_details(
                     st.warehouse_item_id,
                     st.schema_name,
                     st.table_name,
+                    (
+                      SELECT SUM(sp.row_count)
+                      FROM data_objects do
+                      INNER JOIN namespaces ns
+                        ON ns.id = do.namespace_id
+                      INNER JOIN containers c
+                        ON c.id = ns.container_id
+                      INNER JOIN sources s
+                        ON s.id = c.source_id
+                      LEFT JOIN sqlserver_partitions sp
+                        ON sp.data_object_id = do.id
+                      WHERE s.workspace_id = ?1
+                        AND do.object_type = 'table'
+                        AND ns.namespace_name = st.schema_name
+                        AND do.object_name = st.table_name
+                    ) AS row_count,
                     tc.table_type,
                     tc.load_strategy,
                     COALESCE(tc.snapshot_strategy, 'sample_1day') AS snapshot_strategy,
                     tc.incremental_column,
                     tc.date_column,
+                    tc.grain_columns,
+                    tc.relationships_json,
                     tc.pii_columns,
                     tc.confirmed_at
              FROM selected_tables st
@@ -481,27 +522,40 @@ pub fn migration_list_table_details(
 
     let rows = stmt
         .query_map(params![workspace_id], |row| {
-            let confirmed_at: Option<String> = row.get(10)?;
-            let table_type: Option<String> = row.get(4)?;
-            let load_strategy: Option<String> = row.get(5)?;
-            let status = if confirmed_at.is_some() {
+            let table_type: Option<String> = row.get(5)?;
+            let load_strategy: Option<String> = row.get(6)?;
+            let incremental_column: Option<String> = row.get(8)?;
+            let date_column: Option<String> = row.get(9)?;
+            let grain_columns: Option<String> = row.get(10)?;
+            let relationships_json: Option<String> = row.get(11)?;
+            let pii_columns: Option<String> = row.get(12)?;
+            let confirmed_at: Option<String> = row.get(13)?;
+            let status = if table_type.is_some()
+                && load_strategy.is_some()
+                && incremental_column.is_some()
+                && date_column.is_some()
+                && grain_columns.is_some()
+                && relationships_json.is_some()
+                && pii_columns.is_some()
+            {
                 "Ready"
-            } else if table_type.is_none() || load_strategy.is_none() {
-                "Missing details"
             } else {
-                "Needs review"
+                "Missing details"
             };
             Ok(TableDetailRow {
                 selected_table_id: row.get(0)?,
                 warehouse_item_id: row.get(1)?,
                 schema_name: row.get(2)?,
                 table_name: row.get(3)?,
+                row_count: row.get(4)?,
                 table_type,
                 load_strategy,
-                snapshot_strategy: row.get(6)?,
-                incremental_column: row.get(7)?,
-                date_column: row.get(8)?,
-                pii_columns: row.get(9)?,
+                snapshot_strategy: row.get(7)?,
+                incremental_column,
+                date_column,
+                grain_columns,
+                relationships_json,
+                pii_columns,
                 confirmed_at,
                 status: status.to_string(),
             })

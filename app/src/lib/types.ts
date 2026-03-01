@@ -155,6 +155,8 @@ export interface ScopeInventoryRow {
   warehouseItemId: string;
   schemaName: string;
   tableName: string;
+  rowCount: number | null;
+  deltaPerDay: number | null;
   isSelected: boolean;
 }
 
@@ -169,11 +171,14 @@ export interface TableDetailRow {
   warehouseItemId: string;
   schemaName: string;
   tableName: string;
+  rowCount: number | null;
   tableType: string | null;
   loadStrategy: string | null;
   snapshotStrategy: string;
   incrementalColumn: string | null;
   dateColumn: string | null;
+  grainColumns: string | null;
+  relationshipsJson: string | null;
   piiColumns: string | null;
   confirmedAt: string | null;
   status: string;
