@@ -24,6 +24,20 @@ function keyForRow(row: ScopeInventoryRow): string {
   return `${row.warehouseItemId}::${row.schemaName}::${row.tableName}`;
 }
 
+function formatRowCount(value: number | null): string {
+  if (value === null || value === undefined) return '--';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return value.toLocaleString();
+}
+
+function formatDeltaPerDay(value: number | null): string {
+  if (value === null || value === undefined) return '--';
+  const abs = Math.abs(value);
+  const compact = abs >= 1_000 ? `${Math.round(abs / 1_000)}K` : abs.toLocaleString();
+  return `${value < 0 ? '-' : '+'}${compact}`;
+}
+
 export default function ScopeStep() {
   const navigate = useNavigate();
   const { workspaceId, appPhase, phaseFacts, setAppPhaseState } = useWorkflowStore();
@@ -270,7 +284,7 @@ export default function ScopeStep() {
           </div>
         </div>
 
-        <div className="grid grid-cols-[36px_1fr_1fr] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[36px_1fr_1fr_100px_100px] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
           <span />
           <button type="button" className="text-left" onClick={() => updateSort('schema')}>
             Schema {sortKey === 'schema' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
@@ -278,6 +292,8 @@ export default function ScopeStep() {
           <button type="button" className="text-left" onClick={() => updateSort('table')}>
             Table {sortKey === 'table' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
           </button>
+          <span>Rows</span>
+          <span>7d Δ/day</span>
         </div>
 
         <div className="max-h-[520px] overflow-auto">
@@ -291,7 +307,7 @@ export default function ScopeStep() {
             visibleRows.map((row) => (
               <label
                 key={keyForRow(row)}
-                className="grid grid-cols-[36px_1fr_1fr] items-center gap-2 border-b px-3 py-2 text-sm"
+                className="grid grid-cols-[36px_1fr_1fr_100px_100px] items-center gap-2 border-b px-3 py-2 text-sm"
               >
                 <input
                   type="checkbox"
@@ -301,6 +317,8 @@ export default function ScopeStep() {
                 />
                 <span className="font-mono text-muted-foreground">{row.schemaName}</span>
                 <span className="font-mono">{row.tableName}</span>
+                <span className="font-mono text-muted-foreground">{formatRowCount(row.rowCount)}</span>
+                <span className="font-mono text-muted-foreground">{formatDeltaPerDay(row.deltaPerDay)}</span>
               </label>
             ))}
         </div>

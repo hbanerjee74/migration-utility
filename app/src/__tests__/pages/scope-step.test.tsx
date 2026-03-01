@@ -36,8 +36,22 @@ describe('ScopeStep', () => {
       phaseFacts: { ...s.phaseFacts, scopeFinalized: false },
     }));
     tauriMocks.migrationListScopeInventory.mockResolvedValue([
-      { warehouseItemId: 'wh-1', schemaName: 'dbo', tableName: 'fact_sales', isSelected: false },
-      { warehouseItemId: 'wh-1', schemaName: 'dbo', tableName: 'dim_customer', isSelected: true },
+      {
+        warehouseItemId: 'wh-1',
+        schemaName: 'dbo',
+        tableName: 'fact_sales',
+        rowCount: 1_250_000,
+        deltaPerDay: null,
+        isSelected: false,
+      },
+      {
+        warehouseItemId: 'wh-1',
+        schemaName: 'dbo',
+        tableName: 'dim_customer',
+        rowCount: 810_000,
+        deltaPerDay: null,
+        isSelected: true,
+      },
     ]);
     tauriMocks.migrationAddTablesToSelection.mockResolvedValue(1);
     tauriMocks.migrationSetTableSelected.mockResolvedValue(undefined);
@@ -74,6 +88,8 @@ describe('ScopeStep', () => {
     renderStep();
     await screen.findByText('fact_sales');
     expect(screen.getByText('1 tables selected')).toBeInTheDocument();
+    expect(screen.getByText('1.3M')).toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThan(0);
   });
 
   it('adds visible rows to selection', async () => {
@@ -95,4 +111,3 @@ describe('ScopeStep', () => {
     });
   });
 });
-
