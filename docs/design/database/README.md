@@ -224,6 +224,27 @@ Agent-suggested, FDE-confirmed settings per selected table (table config step).
 | `scd_is_current_column` | TEXT | Current-row marker column (Type 2) |
 | `confirmed_at` | TEXT | ISO 8601 timestamp — null until FDE confirms |
 
+### `table_plan`
+
+Per-table execution plan used by coding agents (Plan step). Stores editable plan
+markdown plus lifecycle state from refresh → validate → approve.
+
+| Column | Type | Notes |
+|---|---|---|
+| `selected_table_id` | TEXT PK → `selected_tables.id` | — |
+| `plan_markdown` | TEXT | Editable per-table plan content |
+| `status` | TEXT NOT NULL DEFAULT `missing` | `missing \| draft \| stale \| approved` |
+| `validation_status` | TEXT NOT NULL DEFAULT `not_run` | `not_run \| pass \| fail` |
+| `validation_errors_json` | TEXT | JSON array/string of validation failures |
+| `input_fingerprint` | TEXT | Hash of plan inputs (`table_config` snapshot) to detect stale plans |
+| `version` | INTEGER NOT NULL DEFAULT 1 | Incremented when plan markdown is refreshed/re-generated |
+| `refreshed_at` | TEXT | ISO 8601 timestamp of latest plan refresh |
+| `validated_at` | TEXT | ISO 8601 timestamp of latest validation run |
+| `approved_at` | TEXT | ISO 8601 timestamp when FDE approved this plan |
+| `approved_by` | TEXT | Optional FDE identifier |
+| `created_at` | TEXT NOT NULL | App-generated timestamp |
+| `updated_at` | TEXT NOT NULL | App-generated timestamp |
+
 ## Design Notes
 
 - **`warehouse_item_id` is always a FK to `items.id`** — used in every sub-warehouse
@@ -269,3 +290,8 @@ Agent-suggested, FDE-confirmed settings per selected table (table config step).
 
 - **SCD fields on `table_config`** — SCD behavior is an FDE-confirmed migration decision, so
   `scd_type` and related SCD columns are stored with table config rather than source metadata.
+
+- **`table_plan` is separate from `table_config`** — `table_config` stores structured
+  migration metadata; `table_plan` stores agent-facing editable markdown and plan lifecycle
+  state (`missing/draft/stale/approved`). Keeping them separate preserves deterministic config
+  while enabling iterative FDE plan editing and approval.

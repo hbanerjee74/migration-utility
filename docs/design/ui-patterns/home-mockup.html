@@ -391,6 +391,33 @@
       grid-template-columns: 1.2fr 1fr;
       gap: 12px;
     }
+    .scope-schema-block {
+      border-top: 1px solid var(--border);
+    }
+    .scope-schema-summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      font-size: 12px;
+      color: var(--fg-muted);
+      background: var(--bg-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .scope-schema-summary::-webkit-details-marker { display: none; }
+    .scope-schema-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .scope-disclosure {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--fg-subtle);
+    }
+    .scope-schema-block[open] .scope-disclosure { transform: rotate(90deg); }
     .scope-table-head, .scope-table-row {
       display: grid;
       grid-template-columns: 24px 1.3fr .8fr .7fr .9fr;
@@ -405,16 +432,19 @@
       font-weight: 600;
     }
     .scope-table-row + .scope-table-row { border-top: 1px solid var(--border); }
-    .scope-schema-row {
-      padding: 7px 10px;
+    .scope-note-list {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .scope-note-item {
       font-size: 12px;
       color: var(--fg-muted);
       background: var(--bg-muted);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 9px;
     }
     .kv-grid {
       display: grid;
@@ -478,9 +508,10 @@
         <button class="sw-btn on"  onclick="show('home', this); homeState('setup')">Home — Setup</button>
         <button class="sw-btn"     onclick="show('home', this); homeState('empty')">Home — Ready</button>
         <button class="sw-btn"     onclick="show('home', this); homeState('active')">Home — Active</button>
-        <button class="sw-btn"     onclick="show('scope-select', this, 'scope')">Scope — Tab 1</button>
-        <button class="sw-btn"     onclick="show('scope-details', this, 'scope')">Scope — Tab 2</button>
-        <button class="sw-btn"     onclick="show('scope-final', this, 'scope')">Scope — Tab 3</button>
+        <button class="sw-btn"     onclick="show('scope-select', this, 'scope')">Scope — Select Tables</button>
+        <button class="sw-btn"     onclick="show('scope-details', this, 'scope')">Scope — Table Details</button>
+        <button class="sw-btn"     onclick="show('scope-plan', this, 'scope')">Scope — Plan</button>
+        <button class="sw-btn"     onclick="show('scope-final', this, 'scope')">Scope — Final Scope</button>
         <button class="sw-btn" id="sw-monitor-ready"   onclick="show('monitor',  this); monitorState('ready')">Monitor — Ready</button>
         <button class="sw-btn" id="sw-monitor-running" onclick="show('monitor',  this); monitorState('running')">Monitor — Running</button>
         <button class="sw-btn"     onclick="show('settings-connections', this, 'settings')">Settings — Connections</button>
@@ -725,7 +756,8 @@
             <div class="scope-tabbar">
               <div class="scope-tab active">1. Select Tables</div>
               <div class="scope-tab">2. Table Details</div>
-              <div class="scope-tab">3. Final Scope</div>
+              <div class="scope-tab">3. Plan</div>
+              <div class="scope-tab">4. Final Scope</div>
             </div>
 
             <div class="card" style="overflow-y:auto; flex:1;">
@@ -740,36 +772,46 @@
               <div class="scope-table-head">
                 <span></span><span>Name</span><span>Schema</span><span>Rows</span><span>7d Δ/day</span>
               </div>
-              <div class="scope-schema-row"><span>dbo</span><span class="text-xs">Select all (12)</span></div>
-              <div class="scope-table-row">
-                <input type="checkbox" checked />
-                <span class="font-mono">fact_sales</span>
-                <span class="font-mono text-muted">dbo</span>
-                <span class="font-mono text-muted">12.4M</span>
-                <span class="font-mono text-muted">+182K</span>
-              </div>
-              <div class="scope-table-row">
-                <input type="checkbox" checked />
-                <span class="font-mono">dim_customer</span>
-                <span class="font-mono text-muted">dbo</span>
-                <span class="font-mono text-muted">1.1M</span>
-                <span class="font-mono text-muted">+2.1K</span>
-              </div>
-              <div class="scope-table-row">
-                <input type="checkbox" />
-                <span class="font-mono">dim_product</span>
-                <span class="font-mono text-muted">dbo</span>
-                <span class="font-mono text-muted">85K</span>
-                <span class="font-mono text-muted">+90</span>
-              </div>
-              <div class="scope-schema-row"><span>reporting</span><span class="text-xs">Select all (4)</span></div>
-              <div class="scope-table-row">
-                <input type="checkbox" checked />
-                <span class="font-mono">gold_summary</span>
-                <span class="font-mono text-muted">reporting</span>
-                <span class="font-mono text-muted">420K</span>
-                <span class="font-mono text-muted">+6.2K</span>
-              </div>
+              <details class="scope-schema-block" open>
+                <summary class="scope-schema-summary">
+                  <span class="scope-schema-title"><span class="scope-disclosure">▸</span>dbo</span>
+                  <span class="text-xs">Select all (12)</span>
+                </summary>
+                <div class="scope-table-row">
+                  <input type="checkbox" checked />
+                  <span class="font-mono">fact_sales</span>
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono text-muted">12.4M</span>
+                  <span class="font-mono text-muted">+182K</span>
+                </div>
+                <div class="scope-table-row">
+                  <input type="checkbox" checked />
+                  <span class="font-mono">dim_customer</span>
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono text-muted">1.1M</span>
+                  <span class="font-mono text-muted">+2.1K</span>
+                </div>
+                <div class="scope-table-row">
+                  <input type="checkbox" />
+                  <span class="font-mono">dim_product</span>
+                  <span class="font-mono text-muted">dbo</span>
+                  <span class="font-mono text-muted">85K</span>
+                  <span class="font-mono text-muted">+90</span>
+                </div>
+              </details>
+              <details class="scope-schema-block" open>
+                <summary class="scope-schema-summary">
+                  <span class="scope-schema-title"><span class="scope-disclosure">▸</span>reporting</span>
+                  <span class="text-xs">Select all (4)</span>
+                </summary>
+                <div class="scope-table-row">
+                  <input type="checkbox" checked />
+                  <span class="font-mono">gold_summary</span>
+                  <span class="font-mono text-muted">reporting</span>
+                  <span class="font-mono text-muted">420K</span>
+                  <span class="font-mono text-muted">+6.2K</span>
+                </div>
+              </details>
             </div>
           </div>
         </div><!-- /surface-scope-select -->
@@ -785,13 +827,14 @@
                 <span class="chip chip-blue">9 / 14 tables ready</span>
                 <span class="text-xs text-muted">Needs details for 5 tables</span>
               </div>
-              <button class="btn btn-outline btn-sm">Bulk apply defaults</button>
+              <span class="text-xs text-muted">Table-by-table configuration</span>
             </div>
 
             <div class="scope-tabbar">
               <div class="scope-tab">1. Select Tables</div>
               <div class="scope-tab active">2. Table Details</div>
-              <div class="scope-tab">3. Final Scope</div>
+              <div class="scope-tab">3. Plan</div>
+              <div class="scope-tab">4. Final Scope</div>
             </div>
 
             <div class="scope-grid" style="flex:1;">
@@ -799,27 +842,39 @@
                 <div class="scope-table-head">
                   <span></span><span>Name</span><span>Schema</span><span>Rows</span><span>Status</span>
                 </div>
-                <div class="scope-table-row" style="background:var(--pacific-10); border-top:none;">
-                  <input type="radio" checked />
-                  <span class="font-mono">fact_sales</span>
-                  <span class="font-mono text-muted">dbo</span>
-                  <span class="font-mono text-muted">12.4M</span>
-                  <span class="chip chip-green">Ready</span>
-                </div>
-                <div class="scope-table-row">
-                  <input type="radio" />
-                  <span class="font-mono">dim_customer</span>
-                  <span class="font-mono text-muted">dbo</span>
-                  <span class="font-mono text-muted">1.1M</span>
-                  <span class="chip chip-amber">Missing SCD</span>
-                </div>
-                <div class="scope-table-row">
-                  <input type="radio" />
-                  <span class="font-mono">gold_summary</span>
-                  <span class="font-mono text-muted">reporting</span>
-                  <span class="font-mono text-muted">420K</span>
-                  <span class="chip chip-amber">Missing PK</span>
-                </div>
+                <details class="scope-schema-block" open>
+                  <summary class="scope-schema-summary">
+                    <span class="scope-schema-title"><span class="scope-disclosure">▸</span>dbo</span>
+                    <span class="text-xs">2 selected</span>
+                  </summary>
+                  <div class="scope-table-row" style="background:var(--pacific-10); border-top:none;">
+                    <input type="radio" checked />
+                    <span class="font-mono">fact_sales</span>
+                    <span class="font-mono text-muted">dbo</span>
+                    <span class="font-mono text-muted">12.4M</span>
+                    <span class="chip chip-green">Ready</span>
+                  </div>
+                  <div class="scope-table-row">
+                    <input type="radio" />
+                    <span class="font-mono">dim_customer</span>
+                    <span class="font-mono text-muted">dbo</span>
+                    <span class="font-mono text-muted">1.1M</span>
+                    <span class="chip chip-amber">Missing SCD</span>
+                  </div>
+                </details>
+                <details class="scope-schema-block" open>
+                  <summary class="scope-schema-summary">
+                    <span class="scope-schema-title"><span class="scope-disclosure">▸</span>reporting</span>
+                    <span class="text-xs">1 selected</span>
+                  </summary>
+                  <div class="scope-table-row">
+                    <input type="radio" />
+                    <span class="font-mono">gold_summary</span>
+                    <span class="font-mono text-muted">reporting</span>
+                    <span class="font-mono text-muted">420K</span>
+                    <span class="chip chip-amber">Missing PK</span>
+                  </div>
+                </details>
               </div>
 
               <div class="card card-p" style="overflow-y:auto;">
@@ -828,6 +883,7 @@
                     <p class="text-sm font-semibold font-mono">dbo.fact_sales</p>
                     <p class="text-xs text-muted mt4">Migration metadata required for build + tests</p>
                   </div>
+                  <button class="btn btn-outline btn-sm">Refresh plan</button>
                 </div>
 
                 <div class="kv-grid">
@@ -859,6 +915,61 @@
         </div><!-- /surface-scope-details -->
 
         <!-- ════════════════════════════════════
+             SCOPE SURFACE — PLAN
+        ════════════════════════════════════ -->
+        <div id="surface-scope-plan" class="surface">
+          <div class="section-label">Scope — Plan</div>
+          <div class="scope-shell">
+            <div class="scope-header">
+              <div class="scope-summary">
+                <span class="chip chip-blue">9 / 14 table plans ready</span>
+                <span class="text-xs text-muted">Plan status: Draft · Missing · Stale · Approved</span>
+              </div>
+            </div>
+
+            <div class="scope-tabbar">
+              <div class="scope-tab">1. Select Tables</div>
+              <div class="scope-tab">2. Table Details</div>
+              <div class="scope-tab active">3. Plan</div>
+              <div class="scope-tab">4. Final Scope</div>
+            </div>
+
+            <div class="card card-p" style="overflow-y:auto; flex:1;">
+              <div class="row between mb8">
+                <div class="row gap8" style="align-items:flex-end;">
+                  <div>
+                    <p class="text-xs text-muted mb8">Table</p>
+                    <div class="kv-pill" style="min-width:240px;">dbo.fact_sales ▾</div>
+                  </div>
+                  <span class="chip chip-blue">Draft</span>
+                </div>
+                <div class="row gap8">
+                  <button class="btn btn-outline btn-sm">Refresh plan</button>
+                  <button class="btn btn-outline btn-sm">Validate plan</button>
+                  <button class="btn btn-primary btn-sm">Approve plan</button>
+                </div>
+              </div>
+
+              <pre style="white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; line-height:1.6; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); padding:10px;">## dbo.fact_sales
+- Objective: Build incremental fact model for sales
+- Inputs: dbo.sales_stage, dbo.dim_customer
+- Grain: sale_id
+- PK: sale_id
+- Relationships: customer_id -> dbo.dim_customer.customer_id
+- Load strategy: incremental
+- CDC column: load_date
+- Canonical date: sale_date
+- PII handling: customer_email masked, customer_phone masked
+- SCD: none
+- Tests:
+  - unique_not_null_pk
+  - relationship_customer_id
+  - freshness_sale_date</pre>
+            </div>
+          </div>
+        </div><!-- /surface-scope-plan -->
+
+        <!-- ════════════════════════════════════
              SCOPE SURFACE — TAB 3
         ════════════════════════════════════ -->
         <div id="surface-scope-final" class="surface">
@@ -875,7 +986,8 @@
             <div class="scope-tabbar">
               <div class="scope-tab">1. Select Tables</div>
               <div class="scope-tab">2. Table Details</div>
-              <div class="scope-tab active">3. Final Scope</div>
+              <div class="scope-tab">3. Plan</div>
+              <div class="scope-tab active">4. Final Scope</div>
             </div>
 
             <div class="scope-grid" style="flex:1;">
@@ -1399,6 +1511,17 @@
     </div><!-- /main -->
   </div><!-- /app -->
   </div><!-- /mockup-shell -->
+
+  <div style="max-width:1280px; margin:18px auto 0; padding:0 4px;">
+    <div class="card card-p">
+      <p class="text-sm font-semibold mb8">Mockup Notes — Plan Regeneration UX</p>
+      <div class="scope-note-list">
+        <div class="scope-note-item">Single-table action: Use "Refresh plan" in the Plan surface header.</div>
+        <div class="scope-note-item">No bulk edits/regeneration in MVP. FDE reviews and approves plans table-by-table.</div>
+        <div class="scope-note-item">Persist per-table plan status: Missing, Draft, Stale, Approved.</div>
+      </div>
+    </div>
+  </div>
 
   <style>
     @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
