@@ -237,6 +237,56 @@ describe('WorkspaceTab (Settings)', () => {
     });
   });
 
+  it('apply button sends SQL Server source payload', async () => {
+    const user = userEvent.setup();
+    mockInvokeCommands({
+      workspace_get: null,
+      workspace_apply_and_clone: makeWorkspace({ migrationRepoName: 'acme/data-platform' }),
+      workspace_cancel_apply: undefined,
+      workspace_test_source_connection: 'Connection successful',
+      workspace_discover_source_databases: ['AdventureWorks'],
+      github_list_repos: [{ id: 1, fullName: 'acme/data-platform', private: true }],
+      workspace_reset_state: undefined,
+    });
+    renderPage();
+
+    await user.type(screen.getByTestId('input-source-server'), 'sql.acme.local');
+    await user.clear(screen.getByTestId('input-source-port'));
+    await user.type(screen.getByTestId('input-source-port'), '1433');
+    await user.type(screen.getByTestId('input-source-username'), 'sa');
+    await user.type(screen.getByTestId('input-source-password'), 'secret');
+    await user.click(screen.getByTestId('btn-pick-repo-path'));
+    await user.click(screen.getByTestId('input-repo-name'));
+    await user.type(screen.getByTestId('input-repo-name'), 'ac');
+    await user.click(await screen.findByTestId('repo-suggestion-0'));
+    await user.click(screen.getByTestId('btn-test-connection'));
+    await waitFor(() => expect(screen.getByTestId('btn-apply')).toBeEnabled());
+
+    await user.click(screen.getByTestId('btn-apply'));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('workspace_apply_and_clone', {
+        args: {
+          name: 'Migration Workspace',
+          migrationRepoName: 'acme/data-platform',
+          migrationRepoPath: '/selected/path',
+          fabricUrl: null,
+          fabricServicePrincipalId: null,
+          fabricServicePrincipalSecret: null,
+          sourceType: 'sql_server',
+          sourceServer: 'sql.acme.local',
+          sourceDatabase: 'AdventureWorks',
+          sourcePort: 1433,
+          sourceAuthenticationMode: 'sql_password',
+          sourceUsername: 'sa',
+          sourcePassword: 'secret',
+          sourceEncrypt: true,
+          sourceTrustServerCertificate: false,
+        },
+      });
+    });
+  });
+
   it('shows apply progress and allows cancel while apply is running', async () => {
     const user = userEvent.setup();
     const applyWorkspace = makeWorkspace({ migrationRepoName: 'acme/data-platform' });

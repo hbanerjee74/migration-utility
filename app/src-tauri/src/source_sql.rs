@@ -165,4 +165,87 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    #[ignore = "requires reachable SQL Server (e.g. Docker)"]
+    fn discover_inventory_queries_execute_against_real_sql_server() {
+        let host = std::env::var("MIGRATION_TEST_SQL_SERVER_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port: u16 = std::env::var("MIGRATION_TEST_SQL_SERVER_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(1433);
+        let username =
+            std::env::var("MIGRATION_TEST_SQL_SERVER_USER").unwrap_or_else(|_| "sa".to_string());
+        let password = std::env::var("MIGRATION_TEST_SQL_SERVER_PASSWORD")
+            .unwrap_or_else(|_| "YourStrong!Passw0rd".to_string());
+        let database = std::env::var("MIGRATION_TEST_SQL_SERVER_DATABASE")
+            .unwrap_or_else(|_| "WideWorldImportersDW".to_string());
+
+        let schemas_sql = resolve_source_query("sql_server", SourceQuery::DiscoverSchemas).unwrap();
+        let tables_sql = resolve_source_query("sql_server", SourceQuery::DiscoverTables).unwrap();
+        let procedures_sql =
+            resolve_source_query("sql_server", SourceQuery::DiscoverProcedures).unwrap();
+
+        let mut config = Config::new();
+        config.host(&host);
+        config.port(port);
+        config.database(&database);
+        config.authentication(AuthMethod::sql_server(&username, &password));
+        config.encryption(EncryptionLevel::Off);
+        config.trust_cert();
+
+        let rt = RuntimeBuilder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let tcp = TcpStream::connect(config.get_addr())
+                .await
+                .expect("failed to connect to SQL Server");
+            tcp.set_nodelay(true).expect("failed to set TCP nodelay");
+
+            let mut client = Client::connect(config, tcp.compat_write())
+                .await
+                .expect("failed to authenticate to SQL Server");
+
+            let schema_rows = client
+                .simple_query(schemas_sql)
+                .await
+                .expect("schema query execution failed")
+                .into_first_result()
+                .await
+                .expect("failed to parse schema query result");
+            assert!(
+                !schema_rows.is_empty(),
+                "expected schema discovery to return at least one row"
+            );
+
+            let table_rows = client
+                .simple_query(tables_sql)
+                .await
+                .expect("table query execution failed")
+                .into_first_result()
+                .await
+                .expect("failed to parse table query result");
+            assert!(
+                !table_rows.is_empty(),
+                "expected table discovery to return at least one row"
+            );
+
+            let procedure_rows = client
+                .simple_query(procedures_sql)
+                .await
+                .expect("procedure query execution failed")
+                .into_first_result()
+                .await
+                .expect("failed to parse procedure query result");
+            assert!(
+                !procedure_rows.is_empty(),
+                "expected procedure discovery to return at least one row"
+            );
+        });
+    }
 }
