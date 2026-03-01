@@ -8,7 +8,6 @@
 
 const mockResponses: Record<string, unknown> = {
   // Workspace
-  workspace_get: null,
   workspace_apply_and_clone: undefined,
   workspace_test_source_connection: "Connection successful",
   workspace_discover_source_databases: ["master"],
@@ -44,6 +43,39 @@ const mockResponses: Record<string, unknown> = {
   get_data_dir_path: null,
 };
 
+const STORE_KEY = "migration-workflow";
+
+function getSeededWorkspaceResponse(): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      state?: { workspaceId?: unknown };
+    };
+    const workspaceId = parsed?.state?.workspaceId;
+    if (typeof workspaceId !== "string" || workspaceId.trim().length === 0) {
+      return null;
+    }
+
+    return {
+      id: workspaceId,
+      displayName: workspaceId,
+      migrationRepoName: "acme/repo",
+      migrationRepoPath: "/tmp/repo",
+      sourceServer: "localhost",
+      sourceDatabase: "master",
+      sourcePort: 1433,
+      sourceAuthenticationMode: "sql_password",
+      sourceUsername: "sa",
+      sourcePassword: "password",
+      sourceEncrypt: true,
+      sourceTrustServerCertificate: false,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   // Allow tests to override via window
   const overrides = (window as unknown as Record<string, unknown>).__TAURI_MOCK_OVERRIDES__ as
@@ -53,6 +85,10 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const val = overrides[cmd];
     if (val instanceof Error) throw val;
     return val as T;
+  }
+
+  if (cmd === "workspace_get") {
+    return getSeededWorkspaceResponse() as T;
   }
 
   if (cmd in mockResponses) {

@@ -97,9 +97,10 @@ test.describe('Home — dashboard state @home', () => {
     await page.goto('/home');
     await waitForAppReady(page);
 
-    await expect(page.getByText('Scope', { exact: true })).toBeVisible();
-    await expect(page.getByText('Candidacy Review', { exact: true })).toBeVisible();
-    await expect(page.getByText('Table Config', { exact: true })).toBeVisible();
+    const dashboard = page.getByTestId('home-dashboard-state');
+    await expect(dashboard.getByText('Scope', { exact: true })).toBeVisible();
+    await expect(dashboard.getByText('Candidacy Review', { exact: true })).toBeVisible();
+    await expect(dashboard.getByText('Table Config', { exact: true })).toBeVisible();
   });
 
   test('dashboard shows Quick Actions', async ({ page }) => {

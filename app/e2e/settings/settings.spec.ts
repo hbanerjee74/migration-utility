@@ -71,13 +71,13 @@ test.describe('Settings layout alignment @settings', () => {
     await expect(page.getByTestId('settings-workspace-fabric-card')).toBeVisible();
     await expect(page.getByTestId('settings-workspace-repo-card')).toBeVisible();
     await expect(page.getByTestId('settings-workspace-working-dir-card')).toBeVisible();
-    await expect(page.getByTestId('input-fabric-url')).toBeVisible();
+    await expect(page.getByTestId('input-source-server')).toBeVisible();
     await expect(page.getByTestId('input-repo-name')).toBeVisible();
     await expect(page.getByTestId('input-repo-path')).toBeVisible();
     await expect(page.getByTestId('btn-pick-repo-path')).toBeVisible();
-    await expect(page.getByText('Locked during active migration. Changes are not saved while a migration is running.')).toBeVisible();
+    await expect(page.getByText('Workspace is locked after apply. Reset Migration to edit settings.')).toBeVisible();
     await expect(page.getByTestId('btn-apply')).toBeDisabled();
-    await expect(page.getByTestId('input-fabric-url')).toBeDisabled();
+    await expect(page.getByTestId('input-source-server')).toBeDisabled();
     await expect(page.getByTestId('input-repo-name')).toBeDisabled();
     await expect(page.getByTestId('input-repo-path')).toBeDisabled();
     await expect(page.getByTestId('btn-pick-repo-path')).toBeDisabled();
