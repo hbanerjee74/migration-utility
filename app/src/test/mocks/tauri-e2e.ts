@@ -28,11 +28,14 @@ const mockResponses: Record<string, unknown> = {
   // Candidacy
   get_candidacies: [],
   update_candidacy: undefined,
-  // Table config
-  get_table_configs: [],
-  save_table_config: undefined,
-  // Selected tables
-  get_selected_tables: [],
+  // Scope + table details
+  migration_list_scope_inventory: [],
+  migration_add_tables_to_selection: 0,
+  migration_set_table_selected: undefined,
+  migration_reset_selected_tables: 0,
+  migration_list_table_details: [],
+  migration_save_table_config: undefined,
+  migration_reconcile_scope_state: { kept: 0, invalidated: 0, removed: 0 },
   // Plan
   get_plan_status: { status: "pending", updatedAt: null },
   finalize_plan: undefined,
