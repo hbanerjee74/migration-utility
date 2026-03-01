@@ -14,6 +14,7 @@ use tokio_util::compat::TokioAsyncWriteCompatExt;
 use uuid::Uuid;
 
 use crate::db::DbState;
+use crate::source_sql::{resolve_source_query, should_log_source_sql, SourceQuery};
 use crate::types::{CommandError, Workspace};
 
 #[derive(Deserialize)]
@@ -669,10 +670,18 @@ pub fn workspace_discover_source_databases(
             CommandError::Io(format!("Database discovery failed: {e}"))
         })?;
 
+        let query = resolve_source_query(&args.source_type, SourceQuery::DiscoverDatabases)?;
+        if should_log_source_sql() {
+            log::debug!(
+                "workspace_discover_source_databases: executing query={} source_type={} sql={}",
+                SourceQuery::DiscoverDatabases.name(),
+                args.source_type,
+                query.trim()
+            );
+        }
+
         let rows = client
-            .simple_query(
-                "SELECT name FROM sys.databases WHERE HAS_DBACCESS(name)=1 ORDER BY name",
-            )
+            .simple_query(query)
             .await
             .map_err(|e| {
                 log::error!("workspace_discover_source_databases: query failed: {e}");
