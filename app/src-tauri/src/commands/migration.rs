@@ -2,7 +2,10 @@ use rusqlite::{params, OptionalExtension};
 use tauri::State;
 
 use crate::db::DbState;
-use crate::types::{Candidacy, CommandError, SelectedTable, TableArtifact, TableConfig};
+use crate::types::{
+    Candidacy, CommandError, ScopeInventoryRow, ScopeRefreshSummary, ScopeTableRef, SelectedTable,
+    TableArtifact, TableConfig, TableDetailRow,
+};
 
 #[tauri::command]
 pub fn migration_save_selected_tables(
@@ -275,6 +278,312 @@ pub fn migration_get_table_config(
     Ok(result)
 }
 
+#[tauri::command]
+pub fn migration_list_scope_inventory(
+    workspace_id: String,
+    state: State<DbState>,
+) -> Result<Vec<ScopeInventoryRow>, CommandError> {
+    log::info!("migration_list_scope_inventory: workspace_id={workspace_id}");
+    let conn = state.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT wt.warehouse_item_id, wt.schema_name, wt.table_name,
+                    EXISTS(
+                      SELECT 1 FROM selected_tables st
+                      WHERE st.workspace_id = ?1
+                        AND st.warehouse_item_id = wt.warehouse_item_id
+                        AND st.schema_name = wt.schema_name
+                        AND st.table_name = wt.table_name
+                    ) AS is_selected
+             FROM warehouse_tables wt
+             INNER JOIN items i
+               ON i.id = wt.warehouse_item_id
+             WHERE i.workspace_id = ?1
+             ORDER BY wt.schema_name, wt.table_name",
+        )
+        .map_err(CommandError::from)?;
+
+    let rows = stmt
+        .query_map(params![workspace_id], |row| {
+            Ok(ScopeInventoryRow {
+                warehouse_item_id: row.get(0)?,
+                schema_name: row.get(1)?,
+                table_name: row.get(2)?,
+                is_selected: row.get::<_, bool>(3)?,
+            })
+        })
+        .map_err(CommandError::from)?;
+
+    let mut inventory = Vec::new();
+    for row in rows {
+        inventory.push(row.map_err(CommandError::from)?);
+    }
+    Ok(inventory)
+}
+
+fn deterministic_selected_table_id(workspace_id: &str, table: &ScopeTableRef) -> String {
+    format!(
+        "st:{}:{}:{}:{}",
+        workspace_id,
+        table.warehouse_item_id,
+        table.schema_name.to_lowercase(),
+        table.table_name.to_lowercase()
+    )
+}
+
+#[tauri::command]
+pub fn migration_add_tables_to_selection(
+    workspace_id: String,
+    tables: Vec<ScopeTableRef>,
+    state: State<DbState>,
+) -> Result<i64, CommandError> {
+    log::info!(
+        "migration_add_tables_to_selection: workspace_id={} count={}",
+        workspace_id,
+        tables.len()
+    );
+    let conn = state.0.lock().unwrap();
+    let tx = conn.unchecked_transaction().map_err(CommandError::from)?;
+    let mut added: i64 = 0;
+
+    for table in &tables {
+        let exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(
+                   SELECT 1 FROM selected_tables
+                   WHERE workspace_id = ?1
+                     AND warehouse_item_id = ?2
+                     AND schema_name = ?3
+                     AND table_name = ?4
+                 )",
+                params![
+                    workspace_id,
+                    table.warehouse_item_id,
+                    table.schema_name,
+                    table.table_name
+                ],
+                |row| row.get(0),
+            )
+            .map_err(CommandError::from)?;
+        if exists {
+            continue;
+        }
+
+        tx.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                deterministic_selected_table_id(&workspace_id, table),
+                workspace_id,
+                table.warehouse_item_id,
+                table.schema_name,
+                table.table_name
+            ],
+        )
+        .map_err(CommandError::from)?;
+        added += 1;
+    }
+
+    tx.commit().map_err(CommandError::from)?;
+    Ok(added)
+}
+
+#[tauri::command]
+pub fn migration_set_table_selected(
+    workspace_id: String,
+    table: ScopeTableRef,
+    selected: bool,
+    state: State<DbState>,
+) -> Result<(), CommandError> {
+    log::info!(
+        "migration_set_table_selected: workspace_id={} {}.{} selected={}",
+        workspace_id,
+        table.schema_name,
+        table.table_name,
+        selected
+    );
+    let conn = state.0.lock().unwrap();
+    if selected {
+        conn.execute(
+            "INSERT OR IGNORE INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                deterministic_selected_table_id(&workspace_id, &table),
+                workspace_id,
+                table.warehouse_item_id,
+                table.schema_name,
+                table.table_name
+            ],
+        )
+        .map_err(CommandError::from)?;
+    } else {
+        conn.execute(
+            "DELETE FROM selected_tables
+             WHERE workspace_id = ?1
+               AND warehouse_item_id = ?2
+               AND schema_name = ?3
+               AND table_name = ?4",
+            params![
+                workspace_id,
+                table.warehouse_item_id,
+                table.schema_name,
+                table.table_name
+            ],
+        )
+        .map_err(CommandError::from)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn migration_reset_selected_tables(
+    workspace_id: String,
+    state: State<DbState>,
+) -> Result<i64, CommandError> {
+    log::info!("migration_reset_selected_tables: workspace_id={workspace_id}");
+    let conn = state.0.lock().unwrap();
+    let deleted = conn
+        .execute(
+            "DELETE FROM selected_tables WHERE workspace_id = ?1",
+            params![workspace_id],
+        )
+        .map_err(CommandError::from)?;
+    Ok(i64::try_from(deleted).unwrap_or(0))
+}
+
+#[tauri::command]
+pub fn migration_list_table_details(
+    workspace_id: String,
+    state: State<DbState>,
+) -> Result<Vec<TableDetailRow>, CommandError> {
+    log::info!("migration_list_table_details: workspace_id={workspace_id}");
+    let conn = state.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT st.id,
+                    st.warehouse_item_id,
+                    st.schema_name,
+                    st.table_name,
+                    tc.table_type,
+                    tc.load_strategy,
+                    COALESCE(tc.snapshot_strategy, 'sample_1day') AS snapshot_strategy,
+                    tc.incremental_column,
+                    tc.date_column,
+                    tc.pii_columns,
+                    tc.confirmed_at
+             FROM selected_tables st
+             LEFT JOIN table_config tc
+               ON tc.selected_table_id = st.id
+             WHERE st.workspace_id = ?1
+             ORDER BY st.schema_name, st.table_name",
+        )
+        .map_err(CommandError::from)?;
+
+    let rows = stmt
+        .query_map(params![workspace_id], |row| {
+            let confirmed_at: Option<String> = row.get(10)?;
+            let table_type: Option<String> = row.get(4)?;
+            let load_strategy: Option<String> = row.get(5)?;
+            let status = if confirmed_at.is_some() {
+                "Ready"
+            } else if table_type.is_none() || load_strategy.is_none() {
+                "Missing details"
+            } else {
+                "Needs review"
+            };
+            Ok(TableDetailRow {
+                selected_table_id: row.get(0)?,
+                warehouse_item_id: row.get(1)?,
+                schema_name: row.get(2)?,
+                table_name: row.get(3)?,
+                table_type,
+                load_strategy,
+                snapshot_strategy: row.get(6)?,
+                incremental_column: row.get(7)?,
+                date_column: row.get(8)?,
+                pii_columns: row.get(9)?,
+                confirmed_at,
+                status: status.to_string(),
+            })
+        })
+        .map_err(CommandError::from)?;
+
+    let mut details = Vec::new();
+    for row in rows {
+        details.push(row.map_err(CommandError::from)?);
+    }
+    Ok(details)
+}
+
+#[tauri::command]
+pub fn migration_reconcile_scope_state(
+    workspace_id: String,
+    state: State<DbState>,
+) -> Result<ScopeRefreshSummary, CommandError> {
+    log::info!("migration_reconcile_scope_state: workspace_id={workspace_id}");
+    let conn = state.0.lock().unwrap();
+    let tx = conn.unchecked_transaction().map_err(CommandError::from)?;
+
+    // Prevent duplicate natural keys from accumulating across repeated refresh operations.
+    tx.execute(
+        "DELETE FROM selected_tables
+         WHERE rowid NOT IN (
+           SELECT MIN(rowid)
+           FROM selected_tables
+           GROUP BY workspace_id, warehouse_item_id, schema_name, table_name
+         )",
+        [],
+    )
+    .map_err(CommandError::from)?;
+
+    let invalid_selected_ids: Vec<String> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT st.id
+                 FROM selected_tables st
+                 LEFT JOIN warehouse_tables wt
+                   ON wt.warehouse_item_id = st.warehouse_item_id
+                  AND wt.schema_name = st.schema_name
+                  AND wt.table_name = st.table_name
+                 WHERE st.workspace_id = ?1
+                   AND wt.warehouse_item_id IS NULL",
+            )
+            .map_err(CommandError::from)?;
+        let rows = stmt
+            .query_map(params![workspace_id], |row| row.get::<_, String>(0))
+            .map_err(CommandError::from)?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row.map_err(CommandError::from)?);
+        }
+        result
+    };
+
+    for selected_table_id in &invalid_selected_ids {
+        tx.execute(
+            "DELETE FROM selected_tables WHERE id = ?1",
+            params![selected_table_id],
+        )
+        .map_err(CommandError::from)?;
+    }
+
+    let kept: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM selected_tables WHERE workspace_id = ?1",
+            params![workspace_id],
+            |row| row.get(0),
+        )
+        .map_err(CommandError::from)?;
+    let removed = i64::try_from(invalid_selected_ids.len()).unwrap_or(0);
+
+    tx.commit().map_err(CommandError::from)?;
+    Ok(ScopeRefreshSummary {
+        kept,
+        invalidated: removed,
+        removed,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,5 +760,66 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].procedure_name, "sp_load");
         assert_eq!(results[0].tier, "migrate");
+    }
+
+    #[test]
+    fn reconcile_scope_state_removes_missing_selected_rows() {
+        let conn = db::open_in_memory().unwrap();
+        let (ws_id, item_id) = setup_workspace_and_item(&conn);
+        conn.execute(
+            "INSERT INTO warehouse_tables(warehouse_item_id, schema_name, table_name) VALUES (?1, ?2, ?3)",
+            rusqlite::params![item_id, "dbo", "fact_sales"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["st-1", ws_id, item_id, "dbo", "fact_sales"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO selected_tables(id, workspace_id, warehouse_item_id, schema_name, table_name)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["st-2", ws_id, item_id, "dbo", "missing_table"],
+        )
+        .unwrap();
+
+        let tx = conn.unchecked_transaction().unwrap();
+        let invalid_ids: Vec<String> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT st.id
+                     FROM selected_tables st
+                     LEFT JOIN warehouse_tables wt
+                       ON wt.warehouse_item_id = st.warehouse_item_id
+                      AND wt.schema_name = st.schema_name
+                      AND wt.table_name = st.table_name
+                     WHERE st.workspace_id = ?1
+                       AND wt.warehouse_item_id IS NULL",
+                )
+                .unwrap();
+            stmt.query_map(rusqlite::params![ws_id], |row| row.get(0))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        for id in &invalid_ids {
+            tx.execute(
+                "DELETE FROM selected_tables WHERE id=?1",
+                rusqlite::params![id],
+            )
+            .unwrap();
+        }
+        let kept: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM selected_tables WHERE workspace_id=?1",
+                rusqlite::params![ws_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(invalid_ids, vec!["st-2".to_string()]);
+        assert_eq!(kept, 1);
     }
 }

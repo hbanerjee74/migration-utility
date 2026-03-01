@@ -272,3 +272,45 @@ pub struct TableConfig {
     pub pii_columns: Option<String>,
     pub confirmed_at: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeTableRef {
+    pub warehouse_item_id: String,
+    pub schema_name: String,
+    pub table_name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeInventoryRow {
+    pub warehouse_item_id: String,
+    pub schema_name: String,
+    pub table_name: String,
+    pub is_selected: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TableDetailRow {
+    pub selected_table_id: String,
+    pub warehouse_item_id: String,
+    pub schema_name: String,
+    pub table_name: String,
+    pub table_type: Option<String>,
+    pub load_strategy: Option<String>,
+    pub snapshot_strategy: String,
+    pub incremental_column: Option<String>,
+    pub date_column: Option<String>,
+    pub pii_columns: Option<String>,
+    pub confirmed_at: Option<String>,
+    pub status: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeRefreshSummary {
+    pub kept: i64,
+    pub invalidated: i64,
+    pub removed: i64,
+}
