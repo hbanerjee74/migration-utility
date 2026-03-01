@@ -119,12 +119,63 @@ pub fn write_settings(conn: &Connection, settings: &AppSettings) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::params;
 
     fn open_memory() -> Connection {
         let conn = Connection::open_in_memory().expect("in-memory db");
         conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
         run_migrations(&conn).expect("migrations failed");
         conn
+    }
+
+    fn assert_pk_id(conn: &Connection, table: &str) {
+        let pk_id_count: i64 = conn
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='id' AND pk=1"
+                ),
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            pk_id_count, 1,
+            "expected primary key column id on table '{table}'"
+        );
+    }
+
+    fn assert_index_exists(conn: &Connection, index_name: &str, table: &str) {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1 AND tbl_name=?2",
+                params![index_name, table],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "expected index '{index_name}' on '{table}'");
+    }
+
+    fn assert_fk_delete_cascade(
+        conn: &Connection,
+        child_table: &str,
+        fk_from: &str,
+        parent_table: &str,
+        parent_to: &str,
+    ) {
+        let count: i64 = conn
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM pragma_foreign_key_list('{child_table}')
+                     WHERE \"from\"=?1 AND \"table\"=?2 AND \"to\"=?3 AND on_delete='CASCADE'"
+                ),
+                params![fk_from, parent_table, parent_to],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "expected CASCADE FK on '{child_table}'.{fk_from} -> '{parent_table}'.{parent_to}"
+        );
     }
 
     #[test]
@@ -359,5 +410,115 @@ mod tests {
         assert_eq!(tables, 0);
         assert_eq!(selected, 0);
         assert_eq!(config, 0);
+    }
+
+    #[test]
+    fn canonical_schema_contract_matches_database_design_doc() {
+        let conn = open_memory();
+
+        // Foundational canonical tables use id PK.
+        for table in [
+            "sources",
+            "containers",
+            "namespaces",
+            "data_objects",
+            "orchestration_items",
+            "orchestration_activities",
+            "activity_object_links",
+        ] {
+            assert_pk_id(&conn, table);
+        }
+
+        // Named unique/index contracts.
+        assert_index_exists(&conn, "ux_sources_external", "sources");
+        assert_index_exists(&conn, "ux_containers_external", "containers");
+        assert_index_exists(&conn, "ix_containers_source_id", "containers");
+        assert_index_exists(&conn, "ux_namespaces_natural", "namespaces");
+        assert_index_exists(&conn, "ix_namespaces_container_id", "namespaces");
+        assert_index_exists(&conn, "ux_data_objects_natural", "data_objects");
+        assert_index_exists(&conn, "ix_data_objects_namespace_id", "data_objects");
+        assert_index_exists(&conn, "ux_orchestration_items_external", "orchestration_items");
+        assert_index_exists(&conn, "ix_orchestration_items_source_id", "orchestration_items");
+        assert_index_exists(
+            &conn,
+            "ux_orchestration_activities_natural",
+            "orchestration_activities",
+        );
+        assert_index_exists(
+            &conn,
+            "ix_orchestration_activities_item_id",
+            "orchestration_activities",
+        );
+        assert_index_exists(&conn, "ux_activity_object_links", "activity_object_links");
+        assert_index_exists(
+            &conn,
+            "ix_activity_object_links_activity_id",
+            "activity_object_links",
+        );
+        assert_index_exists(
+            &conn,
+            "ix_activity_object_links_data_object_id",
+            "activity_object_links",
+        );
+
+        // FK Delete Policy: cascade-by-default on foundational graph.
+        assert_fk_delete_cascade(&conn, "sources", "workspace_id", "workspaces", "id");
+        assert_fk_delete_cascade(&conn, "containers", "source_id", "sources", "id");
+        assert_fk_delete_cascade(&conn, "namespaces", "container_id", "containers", "id");
+        assert_fk_delete_cascade(&conn, "data_objects", "namespace_id", "namespaces", "id");
+        assert_fk_delete_cascade(
+            &conn,
+            "orchestration_items",
+            "source_id",
+            "sources",
+            "id",
+        );
+        assert_fk_delete_cascade(
+            &conn,
+            "orchestration_activities",
+            "orchestration_item_id",
+            "orchestration_items",
+            "id",
+        );
+        assert_fk_delete_cascade(
+            &conn,
+            "activity_object_links",
+            "orchestration_activity_id",
+            "orchestration_activities",
+            "id",
+        );
+        assert_fk_delete_cascade(
+            &conn,
+            "activity_object_links",
+            "data_object_id",
+            "data_objects",
+            "id",
+        );
+
+        // Extension tables should cascade from data_objects.
+        for extension_table in [
+            "sqlserver_object_columns",
+            "sqlserver_constraints_indexes",
+            "sqlserver_partitions",
+            "sqlserver_procedure_parameters",
+            "sqlserver_procedure_runtime_stats",
+            "sqlserver_table_ddl_snapshots",
+        ] {
+            assert_fk_delete_cascade(&conn, extension_table, "data_object_id", "data_objects", "id");
+        }
+        assert_fk_delete_cascade(
+            &conn,
+            "sqlserver_procedure_lineage",
+            "procedure_data_object_id",
+            "data_objects",
+            "id",
+        );
+        assert_fk_delete_cascade(
+            &conn,
+            "sqlserver_procedure_lineage",
+            "table_data_object_id",
+            "data_objects",
+            "id",
+        );
     }
 }
