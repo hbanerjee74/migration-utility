@@ -1,5 +1,6 @@
 use crate::types::CommandError;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Debug)]
 pub enum SourceQuery {
     DiscoverDatabases,

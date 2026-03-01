@@ -1001,7 +1001,10 @@ fn maybe_emit_object_import_progress(
         return;
     }
 
-    if imported_objects == 1 || imported_objects == total_objects || imported_objects % 25 == 0 {
+    if imported_objects == 1
+        || imported_objects == total_objects
+        || imported_objects.is_multiple_of(25)
+    {
         let ratio = imported_objects as f64 / total_objects as f64;
         let percent = (95.0 + (ratio * 4.0)).round() as u8;
         emit_apply_progress(
@@ -2183,7 +2186,9 @@ mod tests {
         ];
         for table in tables {
             let count: i64 = conn
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
                 .unwrap();
             assert_eq!(count, 0, "expected table '{table}' to be empty after reset");
         }
