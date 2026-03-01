@@ -1,12 +1,32 @@
 # Design Docs
 
-Each topic gets its own subdirectory with a `README.md`.
+Each design topic gets its own subdirectory with a `README.md`.
 
-## Index
+## What Goes In `requirements`
+
+Use `docs/requirements/` for discovery and planning artifacts:
+
+- problem framing and scope assumptions
+- research notes and evaluation artifacts
+- build plans and decision logs
+
+See [Requirements README](../requirements/README.md).
+
+## What Goes In `design`
+
+Use `docs/design/` for architecture and implementation design details.
+
+### Design Index
 
 - [Database Design](database/README.md)
 - [API Docs](api-docs/README.md)
 - [UI Patterns](ui-patterns/README.md) — surfaces, user flows, screen-level patterns, and interactive mockup
 - [Branding](branding/README.md)
 - [Sidecar](sidecar/README.md)
-- [Docker Setup](setup-docker/README.md)
+
+## What Goes In `references`
+
+Use `docs/reference/` for supporting operational/reference material that is not a
+design decision artifact.
+
+See [Reference README](../reference/README.md).

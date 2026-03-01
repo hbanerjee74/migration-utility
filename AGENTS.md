@@ -4,6 +4,17 @@ Tauri desktop app + headless GitHub Actions pipeline that migrates Microsoft Fab
 
 **Maintenance rule:** This file contains architecture, conventions, and guidelines — not product details. Do not add counts, feature descriptions, or any fact that can be discovered by reading code. If it will go stale when the code changes, it doesn't belong here — point to the source file instead.
 
+## Instruction Hierarchy
+
+Use this precedence when maintaining agent guidance:
+
+1. `AGENTS.md` (canonical, cross-agent source of truth)
+2. `.claude/rules/*.md` (shared detailed rules; agent-agnostic content)
+3. `.claude/skills/*/SKILL.md` (workflow playbooks)
+4. Agent-specific adapter files (for example `CLAUDE.md`) that reference canonical docs
+
+Adapter files must not duplicate canonical policy unless they are adding agent-specific behavior.
+
 ## Architecture
 
 | Layer | Technology |

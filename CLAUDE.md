@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Adapter Role
+
+`AGENTS.md` is canonical for repository-wide guidance. This file is an adapter for Claude-specific routing and should stay lightweight.
+
 ## Delegation Policy
 
 ### Model tiers
