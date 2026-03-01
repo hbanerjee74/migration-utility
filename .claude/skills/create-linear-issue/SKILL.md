@@ -37,10 +37,14 @@ Fallback behavior:
 
 1. Product-level only. No file names, component names, or architecture in issue body.
 2. Confirm before creating. Always show final issue draft before `save_issue`.
-3. Clarifications: ask at most 2 targeted questions. If confidence is high (>=80%), default assumptions and proceed.
+3. Clarifications: ask at most 2 targeted questions. If critical requirements are ambiguous or missing, ask before creating. Do not default assumptions that can change scope or behavior.
 4. Idempotency: re-runs must not duplicate equivalent issues/comments. Reuse discovered open issue when appropriate.
 5. Read relevant existing code before framing requirements and ACs.
 6. Acceptance criteria in Linear must use Markdown checkboxes (`- [ ] ...`).
+7. Do not decompose by implementation layer (`frontend`/`backend`/`API`). Issues must represent integrated, user-visible outcomes that can be validated end-to-end.
+8. Decomposition is allowed only by feature slices. Frontend-only splits are allowed only when each split is an independently testable feature outcome.
+9. Every issue must contain feature requirements/spec detail, not only a goal and acceptance criteria.
+10. Requirements must be precise and testable. Avoid ambiguous words like "better", "support", "handle", "improve", or "optimize" without explicit behavior.
 
 ## Outcomes
 
@@ -79,6 +83,10 @@ Use this description template:
 ## Goal
 ...
 
+## Requirements
+- ...
+- ...
+
 ## Non-goals
 - ...
 
@@ -104,7 +112,7 @@ See `references/linear-operations.md` for estimate table.
 
 1. Fetch projects and labels.
 2. Read relevant existing code for the requested area.
-3. Draft title, estimate, project, labels, description (schema above), ensuring AC items are checkbox bullets (`- [ ] ...`).
+3. Draft title, estimate, project, labels, description (schema above), including explicit requirements/spec and ensuring AC items are checkbox bullets (`- [ ] ...`).
 4. Confirm draft with user.
 5. Create with `mcp__linear__save_issue` (`assignee: "me"` when allowed).
 6. Return issue ID + URL.
