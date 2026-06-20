@@ -35,7 +35,7 @@
     "view": "./scripts/promptfoo.sh view"
   },
   "dependencies": {
-    "@anthropic-ai/claude-code": "^2.1.92",
+    "@anthropic-ai/claude-code": "^2.1.163",
     "promptfoo": "0.121.7",
     "smol-toml": "^1.6.1"
   },
